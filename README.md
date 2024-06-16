@@ -10,7 +10,8 @@ Presently there are shape files provided which provide geo-coded Lat/long coords
 
 
 
-Geoprocessing done in QGIS 3.32
+Geoprocessing done in QGIS 3.32.
+Geocoding of polling stations performed through MMQGIS plugin using OpenStreetMap API
 
 
 Instructions for NewPollArea.py

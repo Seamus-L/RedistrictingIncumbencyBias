@@ -43,7 +43,7 @@ data <- data %>%
 data <- data %>%
   mutate(AddressFull = paste(Riding,Site.name..EN...Nom.du.site..AN., Address..EN..Adresse..AN., Municipality..EN., sep = ","))
 
-#Adjust electora district column to just contain district number
+#Adjust electoral district column to just contain district number
 data <- data %>%
   mutate(Riding = gsub("-.*", "", Riding)) %>% mutate(Riding = trimws(Riding))
 
@@ -58,7 +58,7 @@ Places <- unique(data$AddressFull)
 
 #For dictionary, because polling station IDs indexed to zero for each riding
 #Need to add the riding number to the dictionary
-#IE: 10001,1 is a dictionary entry that will map to polling place 1
+#IE: 10001 1 is a dictionary entry that will map to polling place 1
  
 data$Place <- match(data$AddressFull, Places) #Assign polling place ID's for 42nd election
 
@@ -170,15 +170,70 @@ Results42 <- Results42[Results42$TurnoutAbs != 0, ]
 Results42$TurnoutRel <- Results42_filtered$TurnoutAbs/Results42_filtered$Eligible
 
 
+
+
+
+#Now incorporate spatial data derived from QGIS geolocation process
+
+df_located <- read.csv("CAN42Tag.csv")
+
+#Now use similar processing as above to pair electoral district/polling station pairs
+df_located <- df_located %>%
+  mutate(PD.SV = Reformat_PDSV(PD.SV))
+
+#Adjust electoral district column to retain just the district number
+df_located <- df_located %>%
+  mutate(Electoral = gsub("-.*", "", Electoral)) %>% mutate(Electoral = trimws(Electoral))
+
+
+#Create dictionary column that containates the electoral and Polling station columns for matching
+df_located$dictionary <- paste(df_located$Electoral,df_located$PD.SV) #concatinating station and riding number for matching
+
+df_located$place <- Dictionary42$Place[match(df_located$dictionary,Dictionary42$Station)] #Matching polling place id's to stations
+
+
+#list of locations captures by geo-processing that are deemed to be "precise" - capture a specific building, instead of a geographic feature
+precise = c("place","building","amenity","leisure","man_made","tourism","club","office","historic","shop","aeroway","healthcare","emergency","military")
+
+
+#Add a column indicating precise locate
+df_located <- df_located %>%
+  mutate(Precise = ifelse(category %in% precise, 1, 0))
+
+#Clean IsNew column to take 0 instead of NA
+df_located <- df_located %>%
+    mutate(IsNew = ifelse(is.na(IsNew), 0, IsNew))
+
+#Because of mistakes in data processing, the geolocate was done at the polling station level. Will truncate data to include only first entry from each polling place to make matching simpler
+df_located <- df_located %>%
+  distinct(place, .keep_all = TRUE)
+
+
+#Initialize new columns in Results42 to for gelocation data
+Results42$Located <- 0
+Results42$LatLong <- NA
+Results42$IsNew <- NA
+Results42$Precise <- NA
+
+
+#Iterate across df_located to add location-based data to the main dataframe
+for (i in 1:nrow(df_located)) {
+  #Find which index corresponds to each polling place
+  row_to_find = which(Results42$Place == df_located$place[i])
+  Results42$Located[row_to_find] = 1
+  Results42$LatLong[row_to_find] = df_located$latlong[i]
+  Results42$IsNew[row_to_find] = df_located$IsNew[i]
+  Results42$Precise[row_to_find] = df_located$Precise[i]
+}
+
+
+
+
+
+
 write.csv(Results42, file = "42Results.csv", row.names = FALSE)
 
-# #Number of polling places that had >100% turnout (can only be due to people voting)
-# sum(Results42_filtered$TurnoutRel > 1)
 
+# sum(Results42$Located == 1)
 
-# #Remove territories from list
-# territories = c(60001,61001,62001)
-# rows_to_drop <- Results42_filtered$Riding %in% territories
-
-# Results42_filtered_territories <- Results42_filtered[!rows_to_drop, ]
-# sum(Results42_filtered_territories$TurnoutRel > 1)
+# sum(Results42$IsNew == 1, na.rm = TRUE)

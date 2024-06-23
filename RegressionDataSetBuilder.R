@@ -413,3 +413,45 @@ stargazer(model3, model4, model5,
           omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
           title = "Linear Regression Model Results",
           align = TRUE)  # Align coefficients
+
+
+
+#Fix small bug - should be removed later!!!!!!!!!!
+df_42Data_Filtered$IsNew[1] = 0
+
+#Create data frame to store data on distribution of polling places and new-places by riding
+
+RidingData = as.data.frame(unique(df_42Data$Riding))
+colnames(RidingData) <- c("Riding")
+
+territories = c(60001, 61001, 62001)
+
+RidingData <- RidingData %>%
+  filter(!Riding %in% territories)
+
+#Initialize columns for other metrics
+RidingData$FullSample = 0
+RidingData$LocatedAll = 0
+RidingData$LocatedNew = 0
+RidingData$PreciseAll = 0
+RidingData$PreciseNew = 0
+
+for (i in 1:nrow(df_42Data)){ #Iterate across every row in the data table
+  row_to_find = which(RidingData$Riding == df_42Data$Riding[i]) #Find which row each observation corresponds to in the aggregation table
+  RidingData$FullSample[row_to_find] = RidingData$FullSample[row_to_find] + 1
+}
+
+for (i in 1:nrow(df_42Data_Filtered)){ #Iterate across every row in the data table
+  row_to_find = which(RidingData$Riding == df_42Data_Filtered$Riding[i]) #Find which row each observation corresponds to in the aggregation table
+  RidingData$LocatedAll[row_to_find] = RidingData$LocatedAll[row_to_find] + 1
+  RidingData$LocatedNew[row_to_find] = RidingData$LocatedNew[row_to_find] + df_42Data_Filtered$IsNew[i]
+}
+
+for (i in 1:nrow(df_42Data_Filtered_Precise)){ #Iterate across every row in the data table
+  row_to_find = which(RidingData$Riding == df_42Data_Filtered_Precise$Riding[i]) #Find which row each observation corresponds to in the aggregation table
+  RidingData$PreciseAll[row_to_find] = RidingData$PreciseAll[row_to_find] + 1
+  RidingData$PreciseNew[row_to_find] = RidingData$PreciseNew[row_to_find] + df_42Data_Filtered_Precise$IsNew[i]
+}
+
+
+stargazer(RidingData)

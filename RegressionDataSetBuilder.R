@@ -82,37 +82,6 @@ for (i in 1:nrow(df_42Data)){
 #Create filtered Df to run first regression - only include located polling places
 df_42Data_Filtered = df_42Data %>% filter(Located != 0)
 
-#Model 0 - basic without any additional fixed effects
-model0 = lm(IncumbentShare ~ IsNew, data = df_42Data_Filtered)
-summary(model0)
-
-#Model 1 - basic without riding level fixed effects, but including party effects
-model1 = lm(IncumbentShare ~ Incumbent + IsNew, data = df_42Data_Filtered)
-summary(model1)
-
-#Model 2 - includes riding level fixed effects
-model2 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data_Filtered)
-summary(model2)
-
-
-
-#Filter to only include PRECISE locations
-#Create filtered Df to run first regression - only include located polling places
-df_42Data_Filtered_Precise = df_42Data_Filtered %>% filter(Precise == 1)
-
-#Model 0 - basic without any additional fixed effects
-model3 = lm(IncumbentShare ~ IsNew, data = df_42Data_Filtered_Precise)
-summary(model3)
-
-#Model 1 - basic without riding level fixed effects, but including party effects
-model4 = lm(IncumbentShare ~ Incumbent + IsNew, data = df_42Data_Filtered_Precise)
-summary(model4)
-
-#Model 2 - includes riding level fixed effects
-model5 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data_Filtered_Precise)
-summary(model5)
-
-
 #######################################################
 #Now include previous poll results to see if they predict turnout now
 
@@ -195,7 +164,6 @@ for (i in 1:nrow(df_42Dict)){ #Iterate across dictionary to assign address to ea
 df_42Dict$Match41 = 0 #First, initialize column
 
 for (i in 1:nrow(df_42Dict)){ #Iterate across dictionary to assign address to each polling place
-    print(i)
     row_to_find = which(df_41Dict$Address == df_42Dict$Address[i])
       if (length(row_to_find) == 0){
       } else {
@@ -203,7 +171,245 @@ for (i in 1:nrow(df_42Dict)){ #Iterate across dictionary to assign address to ea
       }
 }
 
+
+
 #Now drop all rows with 0 in Match41
 df_42Dict = df_42Dict %>% filter(Match41 != 0)
 
 #Now, find the incumbent vote share FUCK I can't do that with my data because it only captures the vote share for the person who won the previous election, so if someone was moved to a riding where the incumbent party changed then it won't work.
+
+#For now - find attrition if we used historic data
+
+#Initialise place41 row
+df_42Data_Filtered$Place41 = 0
+
+for (i in 1:nrow(df_42Data_Filtered)) {
+  #Find which index corresponds to each polling place
+  row_to_find = which(df_42Dict$Place == df_42Data_Filtered$Place[i])
+  if (length(row_to_find) == 0){
+    df_42Data_Filtered$Place41[i] = 0
+  } else {
+  df_42Data_Filtered$Place41[i] = df_42Dict$Match41[row_to_find]
+  }
+}
+
+
+##################################
+
+
+
+
+
+
+#Model 0 - basic without any additional fixed effects
+model0 = lm(IncumbentShare ~ IsNew, data = df_42Data_Filtered)
+summary(model0)
+
+#Model 1 - basic without riding level fixed effects, but including party effects
+model1 = lm(IncumbentShare ~ Incumbent + IsNew, data = df_42Data_Filtered)
+summary(model1)
+
+#Model 2 - includes riding level fixed effects
+model2 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data_Filtered)
+summary(model2)
+
+
+
+#Filter to only include PRECISE locations
+#Create filtered Df to run first regression - only include located polling places
+df_42Data_Filtered_Precise = df_42Data_Filtered %>% filter(Precise == 1)
+
+#Model 0 - basic without any additional fixed effects
+model3 = lm(IncumbentShare ~ IsNew, data = df_42Data_Filtered_Precise)
+summary(model3)
+
+#Model 1 - basic without riding level fixed effects, but including party effects
+model4 = lm(IncumbentShare ~ Incumbent + IsNew, data = df_42Data_Filtered_Precise)
+summary(model4)
+
+#Model 2 - includes riding level fixed effects
+model5 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data_Filtered_Precise)
+summary(model5)
+
+
+
+
+
+
+
+###############################################
+#Robustness checker
+
+#Compute vote share of winning party by riding within my data and compare to actual vote share in winning election
+#Help identify bias in data
+#Should colour code winner by party (red, orange, blue, light blue, green)
+
+
+#First, use table 12 to find winning party for each riding
+df_42Winners <- read.csv("42ResultsRAW/table_tableau12.csv")
+#Now, because the table records the results for each person running, need to truncate so only the first row is retained for each riding
+df_42Winners <- df_42Winners %>% distinct(Electoral.District.Number.Numéro.de.circonscription, .keep_all = TRUE)
+
+
+
+#Now make a column that labels the winning party
+df_42Winners$WinningParty = 0
+
+
+for (i in 1:nrow(df_42Winners)) { #Iterate across every row in this table
+    for (j in 1:6) { #Check to see which party is listed in the 
+        contains_test <- str_detect(df_42Winners$Candidate.Candidat[i], parties_listed[j])
+
+            if (contains_test) { #If test is true, write the party name in this column
+                df_42Winners$WinningParty[i] = parties_tag[j]
+                break #break once a match has been found
+            }
+    }
+}
+
+
+#Now need to aggregate results in df_42_Filtered to be at riding level
+#Must also do this for the precise data frame afterward
+
+#Initialise data frame for winners
+df_42Data_Filtered_Winner = as.data.frame(unique(df_42Data$Riding))
+colnames(df_42Data_Filtered_Winner) <- c("Riding")
+
+#Add columns for winner, vote share, then computed total votes and computed vote share
+df_42Data_Filtered_Winner$Winner = 0 #Actual results from table 12
+df_42Data_Filtered_Winner$VoteShare = 0 #Actual results from table 12
+df_42Data_Filtered_Winner$CompCandidateVote = 0 #For located stations only
+df_42Data_Filtered_Winner$CompTurnout = 0 #For located stations only
+df_42Data_Filtered_Winner$CompVoteShare = 0 #For located stations only
+df_42Data_Filtered_Winner$PreciseCompCandidateVote = 0 #For precise filter
+df_42Data_Filtered_Winner$PreciseCompTurnout = 0 #For located stations only
+df_42Data_Filtered_Winner$PreciseCompVoteShare = 0  #For precise filter
+
+#Now, iterate through ridings and assign winner and vote share from df_42Winners
+for (i in 1:nrow(df_42Data_Filtered_Winner)) {
+  #Find which index corresponds to each polling place
+  row_to_find = which(df_42Winners$Electoral.District.Number.Numéro.de.circonscription == df_42Data_Filtered_Winner$Riding[i])
+  df_42Data_Filtered_Winner$Winner[i] = df_42Winners$WinningParty[row_to_find]
+  df_42Data_Filtered_Winner$VoteShare[i] = df_42Winners$Percentage.of.Votes.Obtained..Pourcentage.des.votes.obtenus[row_to_find]
+}
+
+#Now, aggregate vote results in df_42Data_Filtered to riding level
+
+for (i in 1:nrow(df_42Data_Filtered)){ #Iterate across every row in the data table
+  row_to_find = which(df_42Data_Filtered_Winner$Riding == df_42Data_Filtered$Riding[i]) #Find which row each observation corresponds to in the aggregation table
+  party = df_42Data_Filtered_Winner$Winner[row_to_find] #Find correct party
+
+  df_42Data_Filtered_Winner$CompCandidateVote[row_to_find] = df_42Data_Filtered_Winner$CompCandidateVote[row_to_find] + df_42Data_Filtered[[party]][i] #Add party specific vote
+  
+  df_42Data_Filtered_Winner$CompTurnout[row_to_find] = df_42Data_Filtered_Winner$CompTurnout[row_to_find] + df_42Data_Filtered$TurnoutAbs[i] #Add absolute turnout
+}
+
+
+#Repeat for precise locations
+
+for (i in 1:nrow(df_42Data_Filtered_Precise)){ #Iterate across every row in the data table
+  row_to_find = which(df_42Data_Filtered_Winner$Riding == df_42Data_Filtered_Precise$Riding[i]) #Find which row each observation corresponds to in the aggregation table
+  party = df_42Data_Filtered_Winner$Winner[row_to_find] #Find correct party
+
+  df_42Data_Filtered_Winner$PreciseCompCandidateVote[row_to_find] = df_42Data_Filtered_Winner$PreciseCompCandidateVote[row_to_find] + df_42Data_Filtered_Precise[[party]][i] #Add party specific vote
+  
+  df_42Data_Filtered_Winner$PreciseCompTurnout[row_to_find] = df_42Data_Filtered_Winner$PreciseCompTurnout[row_to_find] + df_42Data_Filtered_Precise$TurnoutAbs[i] #Add absolute turnout
+}
+
+#Compute turnout now as fraction of vote share
+df_42Data_Filtered_Winner$CompVoteShare = (df_42Data_Filtered_Winner$CompCandidateVote/df_42Data_Filtered_Winner$CompTurnout)*100 #For all locations
+
+df_42Data_Filtered_Winner$PreciseCompVoteShare = (df_42Data_Filtered_Winner$PreciseCompCandidateVote/df_42Data_Filtered_Winner$PreciseCompTurnout)*100 #For precise locations
+
+
+
+
+library(ggplot2)
+# library(ggthemes)
+
+#Assign party colours to each row for party elected
+parties_colours = c("#d71920","#003F72","#F58220","#3D9B35","#33B2CC")
+
+
+df_42Data_Filtered_Winner$Colour = 0 #Initialize colour column
+
+for (i in 1:nrow(df_42Data_Filtered_Winner)) { #Iterate across every row in this table
+    for (j in 1:5) { #Check to see which party is listed in the 
+        contains_test <- (df_42Data_Filtered_Winner$Winner[i] == parties_tag[j])
+            if (contains_test) { #If test is true, write the party name in this column
+                df_42Data_Filtered_Winner$Colour[i] = parties_colours[j]
+                break #break once a match has been found
+            }
+    }
+}
+
+unique(df_42Data_Filtered_Winner$Winner)
+
+parties_colours2 = c("LIB" = "#d71920","CON" = "#003F72","NDP" = "#F58220","GREEN" = "#3D9B35","BLOC" = "#33B2CC")
+
+
+plot1 <- ggplot(df_42Data_Filtered_Winner, aes(x = VoteShare, y = CompVoteShare, colour = Winner)) +
+  geom_point(size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black", size = 1) +
+  labs(title = "Computed vs Actual Vote Share of Winner",
+       x = "Actual Vote Share of Winner",
+       y = "Computed Vote Share of Winner") +
+  xlim(30, 80) +
+  ylim(30, 80) +
+  scale_color_manual(values = parties_colours2)+
+  labs(colour = "Party") +
+  theme(
+    legend.position = c(0.98, .5),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+    legend.margin = margin(6, 6, 6, 6)
+    )
+
+
+
+
+plot2 <- ggplot(df_42Data_Filtered_Winner, aes(x = VoteShare, y = PreciseCompVoteShare, colour = Winner)) +
+  geom_point(size = 3) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black", size = 1) +
+  labs(title = "Computed vs Actual Vote Share of Winner: Precise",
+       x = "Actual Vote Share of Winner",
+       y = "Computed Vote Share of Winner") +
+  xlim(30, 80) +
+  ylim(30, 80) +
+  scale_color_manual(values = parties_colours2)+
+  labs(colour = "Party") +
+  theme(
+    legend.position = c(0.98, .5),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+    legend.margin = margin(6, 6, 6, 6)
+    )
+
+
+
+
+#Export plots
+ggsave("plot1.png", plot = plot1, width = 6, height = 4, dpi = 300)
+ggsave("plot2.png", plot = plot2, width = 6, height = 4, dpi = 300)
+
+cat(" Attrition from matching to 41 =",1-sum(df_42Data_Filtered$Place41!=0)/nrow(df_42Data_Filtered))
+
+cat(" Attrition from matching to 41 with precise data =",1-sum(df_42Data_Filtered_Precise$Place41!=0)/nrow(df_42Data_Filtered_Precise))
+
+
+install.packages("stargazer")
+library(stargazer)
+
+stargazer(model0, model1, model2,
+          keep = c('Constant','IsNew'),
+          omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
+          title = "Linear Regression Model Results",
+          align = TRUE)  # Align coefficients
+
+
+
+stargazer(model3, model4, model5,
+          keep = c('Constant','IsNew'),
+          omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
+          title = "Linear Regression Model Results",
+          align = TRUE)  # Align coefficients

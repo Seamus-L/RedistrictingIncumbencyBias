@@ -369,5 +369,12 @@ for (j in 1:nrow(poll)) {
 
 Results41$TurnoutRel <- Results41$TurnoutAbs/Results41$Eligible
 
-
+#Write results for 41st election
 write.csv(Results41, file = "41Results.csv", row.names = FALSE)
+
+#Write dictionary for 41st election
+write.csv(Dictionary41, file = "41Dictionary.csv", row.names = FALSE)
+
+
+#Write dictionary for 42nd election
+write.csv(Dictionary42, file = "42Dictionary.csv", row.names = FALSE)

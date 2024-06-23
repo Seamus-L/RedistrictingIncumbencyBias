@@ -1,4 +1,6 @@
-#This script aggregates polling station level results to the building level for use in geo-coded resutls # nolint: line_length_linter.
+#This script aggregates polling station level results to the building level for use in geo-coded resutls 
+#This document, as the name suggests, aggregats the results of the 42nd national election. It also aggregates 41st election results in the 2nd half
+
 
 library(dplyr)
 
@@ -11,9 +13,6 @@ library(dplyr)
 #First, because polling stations/places do not have unique names, I must create a library
 #that distinguishes unique polling places using their address 
 #This dictionary will relate polling station numbers to a polling place - ie, address, that will be used to aggregate results
-
-
-# data <- read.csv("42ResultsRAW/42PollLocations.csv")
 
 data <- read.csv("42ResultsRAW/42PollLocations.csv", header = TRUE, sep = ",")
 
@@ -237,3 +236,138 @@ write.csv(Results42, file = "42Results.csv", row.names = FALSE)
 # sum(Results42$Located == 1)
 
 # sum(Results42$IsNew == 1, na.rm = TRUE)
+
+
+
+
+
+############################################################################
+#Repeat for 41st election polling stations
+
+
+
+
+
+
+
+
+data <- read.csv("41ResultsRAW/41PollLocations.csv", header = TRUE, sep = ",")
+
+
+
+
+#First, exclude all results that are not ordinary polls (that is advanced, mobile etc...)
+data <- data %>% filter(Type %in% "ORD")
+
+
+# Apply the function to the PD.SV column
+data <- data %>%
+  mutate(PD.SV = Reformat_PDSV(PD.SV))
+
+#Concatinate english address for matching stations to a polling place
+data <- data %>%
+  mutate(AddressFull = paste(Riding,Site.name..EN...Nom.du.site..AN., Address..EN..Adresse..AN., Municipality..EN., sep = ","))
+
+#Generate a list of all unique entries in Riding column for use later
+Ridings <- unique(data$Riding)
+
+
+#Now create dictionary that maps polling station numbers (PD.SV) to a polling place
+Places <- unique(data$AddressFull)
+
+
+#For dictionary, because polling station IDs indexed to zero for each riding
+#Need to add the riding number to the dictionary
+#IE: 10001 1 is a dictionary entry that will map to polling place 1
+ 
+data$Place <- match(data$AddressFull, Places) #Assign polling place ID's for 41st election
+
+
+Dictionary41 <- data.frame(Station = paste(data$Riding,data$PD.SV),Place = data$Place)
+
+#Initialise data frame that will store results by polling place
+Rows = length(unique(Dictionary41$Place)) #Define data frame size
+
+#Creating list of ridings that correspond to each polling place
+temp <- Dictionary41 %>% mutate(Station = gsub("^(\\d{5}).*", "\\1", Station))
+
+Results41 <- data.frame(Riding = temp$Station[match(unique(Dictionary41$Place),Dictionary41$Place)], Place = unique(Dictionary41$Place), Eligible = numeric(Rows), TurnoutAbs = numeric(Rows), TurnoutRel = numeric(Rows), 
+Winner = numeric(Rows))
+
+
+#Load readr to import csv's with french characters
+library(readr)
+
+association <- read_csv("41ResultsRAW/table_tableau11.csv", locale = locale(encoding = "ISO-8859-1"))
+
+
+
+# Create list of parties to remove from their names
+parties_to_remove = c(" Liberal/Libéral", " Conservative/Conservateur", " NDP-New Democratic Party/NPD-Nouveau Parti démocratique", " Bloc Québécois/Bloc Québécois", " Green Party/Parti Vert")
+
+# Create function to remove party from name
+remove_political_party <- function(candidate_info, parties) {
+  pattern <- paste(parties, collapse = "|") # Create a regex pattern
+  gsub(paste0(",?\\s*(", pattern, ")$"), "", candidate_info) # Remove the party info
+}
+
+# Function to reorder names to "first name last name"
+reorder_name <- function(name) {
+  name_parts <- strsplit(name, ",\\s*")[[1]]  # Split by comma and optional whitespace
+  if (length(name_parts) == 2) {
+    paste(trimws(name_parts[2]), trimws(name_parts[1]))  # Trim whitespace and reorder parts
+  } else {
+    name  # Return original if not in expected format
+  }
+}
+
+# Adjust data frame using the functions
+association <- association %>%
+  rowwise() %>%
+  mutate(CandidateName = reorder_name(remove_political_party(`Elected Candidate/Candidat elu`, parties_to_remove)))
+
+#Iterating through riding data for 41st election now
+
+
+
+for (i in Ridings){
+print(i)
+
+#Read in csv
+ReadAddress <- paste0("41ResultsRAW/pollbypoll_bureauparbureau",i,'.csv') #Generates string that iterates through CSV list
+print(ReadAddress)
+poll <- read_csv(ReadAddress, locale = locale(encoding = "ISO-8859-1"))
+
+#Find riding number, and associated election winner
+row_to_find = which(association$'Electoral District Number/Numero de circonscription' == i)[1]
+Candidate_to_match = association$CandidateName[row_to_find]
+
+# Filter out rows where 'Scott Andrews' column contains "Void" or "merged"
+poll <- poll %>%
+  filter(!is.na(as.numeric(as.character(!!sym(Candidate_to_match))))) %>%
+  mutate(!!sym(Candidate_to_match) := as.numeric(as.character(!!sym(Candidate_to_match))))
+
+
+poll$dictionary <- paste(poll$'Electoral District Number/Numéro de circonscription',poll$'Polling Station Number/Numéro du bureau de scrutin') #concatinating station and riding number for matching
+
+poll$place <- Dictionary41$Place[match(poll$dictionary,Dictionary41$Station)] #Matching polling place id's to stations
+
+
+#Iterate across data frame to find total vote count and votes for elected candidate
+for (j in 1:nrow(poll)) {
+    #Write votes for winner
+    Results41$Winner[poll$place[j]] = Results41$Winner[poll$place[j]] + poll[[Candidate_to_match]][j]
+    
+    #Write eligible voters
+    Results41$Eligible[poll$place[j]] = Results41$Eligible[poll$place[j]] + poll$'Electors/Électeurs'[j]
+
+    #Write total votes cast
+    Results41$TurnoutAbs[poll$place[j]] = Results41$TurnoutAbs[poll$place[j]] + poll$'Total Votes/Total des votes'[j]
+  }  
+
+}
+
+Results41$TurnoutRel <- Results41$TurnoutAbs/Results41$Eligible
+
+
+write.csv(Results41, file = "41Results.csv", row.names = FALSE)

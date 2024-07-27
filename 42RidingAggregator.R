@@ -213,7 +213,7 @@ Results42$Located <- 0
 Results42$LatLong <- NA
 Results42$IsNew <- NA
 Results42$Precise <- NA
-
+Results42$PrevRidingNo <- 0
 
 #Iterate across df_located to add location-based data to the main dataframe
 for (i in 1:nrow(df_located)) {
@@ -223,6 +223,7 @@ for (i in 1:nrow(df_located)) {
   Results42$LatLong[row_to_find] = df_located$latlong[i]
   Results42$IsNew[row_to_find] = df_located$IsNew[i]
   Results42$Precise[row_to_find] = df_located$Precise[i]
+  Results42$PrevRidingNo[row_to_find] = df_located$PrevRidingNo[i]
 }
 
 
@@ -271,6 +272,7 @@ data <- data %>%
 #Generate a list of all unique entries in Riding column for use later
 Ridings <- unique(data$Riding)
 
+Ridings
 
 #Now create dictionary that maps polling station numbers (PD.SV) to a polling place
 Places <- unique(data$AddressFull)
@@ -291,12 +293,189 @@ Rows = length(unique(Dictionary41$Place)) #Define data frame size
 #Creating list of ridings that correspond to each polling place
 temp <- Dictionary41 %>% mutate(Station = gsub("^(\\d{5}).*", "\\1", Station))
 
-Results41 <- data.frame(Riding = temp$Station[match(unique(Dictionary41$Place),Dictionary41$Place)], Place = unique(Dictionary41$Place), Eligible = numeric(Rows), TurnoutAbs = numeric(Rows), TurnoutRel = numeric(Rows), 
-Winner = numeric(Rows))
+Results41 <- data.frame(Riding = temp$Station[match(unique(Dictionary41$Place),Dictionary41$Place)], Place = unique(Dictionary41$Place), TurnoutAbs = numeric(Rows), LIB = numeric(Rows), CON = numeric(Rows), NDP = numeric(Rows), BLOC = numeric(Rows), GREEN = numeric(Rows))
 
 
 #Load readr to import csv's with french characters
 library(readr)
+
+#Read in candidates from a seperate table to associate them with a party
+candidates <- read_csv("41ResultsRAW/table_tableau12.csv", locale = locale(encoding = "ISO-8859-1"))
+
+
+candidate_map_41 <- data.frame(Riding = unlist(Ridings))
+
+#Initialize other rows for candidate names
+candidate_map_41$LIB_CAND = 0
+candidate_map_41$CON_CAND = 0
+candidate_map_41$NDP_CAND = 0
+candidate_map_41$BLOC_CAND = 0
+candidate_map_41$GREEN_CAND = 0
+
+
+
+for (i in 1:nrow(candidates)){ #Iterate across dictionary to assign address to each polling place
+    row_to_find = which(candidate_map_41$Riding == candidates$'Electoral District Number/Numéro de circonscription'[i])
+      if (length(row_to_find) == 0){
+
+      } else {
+
+        #Check for each party
+        #Liberal
+        if (grepl("Liberal", candidates$Candidate_Candidat[i]) == TRUE){
+          candidate_map_41$LIB_CAND[row_to_find] = candidates$Candidate_Candidat[i]
+        }
+
+        #Cons
+        if (grepl("Conservative", candidates$Candidate_Candidat[i]) == TRUE){
+          candidate_map_41$CON_CAND[row_to_find] = candidates$Candidate_Candidat[i]
+        }
+
+        #NDP
+        if (grepl("NDP", candidates$Candidate_Candidat[i]) == TRUE){
+          candidate_map_41$NDP_CAND[row_to_find] = candidates$Candidate_Candidat[i]
+        }
+        
+        #BLOC
+        if (grepl("Bloc", candidates$Candidate_Candidat[i]) == TRUE){
+          candidate_map_41$BLOC_CAND[row_to_find] = candidates$Candidate_Candidat[i]
+        }
+
+        #GREEN
+        if (grepl("Green", candidates$Candidate_Candidat[i]) == TRUE){
+          candidate_map_41$GREEN_CAND[row_to_find] = candidates$Candidate_Candidat[i]
+        }
+
+      }
+}
+
+
+#Now must adjust data as it contains both party and candidate name
+
+retain_first_two_words <- function(text) {
+  words <- str_split(text, "\\s+")[[1]]  # Split the text by spaces
+  first_two <- str_c(words[1:2], collapse = " ")  # Concatenate the first two words
+  return(first_two)
+}
+
+
+candidate_map_41$LIB_CAND <- sapply(candidate_map_41$LIB_CAND, retain_first_two_words)
+candidate_map_41$CON_CAND <- sapply(candidate_map_41$CON_CAND, retain_first_two_words)
+candidate_map_41$NDP_CAND <- sapply(candidate_map_41$NDP_CAND, retain_first_two_words)
+candidate_map_41$BLOC_CAND <- sapply(candidate_map_41$BLOC_CAND, retain_first_two_words)
+candidate_map_41$GREEN_CAND <- sapply(candidate_map_41$GREEN_CAND, retain_first_two_words)
+
+
+################## Now begin reading in data and tabulating to polling places
+
+#Read in csv
+for (i in Ridings){
+print(i)
+
+ReadAddress <- paste0("41ResultsRAW/pollbypoll_bureauparbureau",i,'.csv') #Generates string that iterates through CSV list
+poll <- read_csv(ReadAddress, locale = locale(encoding = "ISO-8859-1"))
+
+#Find riding number
+row_to_find = which(candidate_map_41$Riding == i)[1]
+
+
+#Need to drop extra names the titles of candidates to match with previous data
+col_names <- colnames(poll)
+
+start_index <- which(col_names == "Polling Station Name/Nom du bureau de scrutin") + 1
+end_index <- which(col_names == "Rejected Ballots/Bulletins rejetés") - 1
+
+
+retain_first_two_words <- function(title) {
+  words <- unlist(strsplit(title, "\\s+"))  # Split title into words
+  first_two <- paste(words[1:2], collapse = " ")  # Concatenate first two words
+  return(first_two)
+}
+
+modified_col_names <- col_names
+modified_col_names[start_index:end_index] <- sapply(col_names[start_index:end_index], retain_first_two_words)
+
+#Reassign column names
+colnames(poll) <- modified_col_names
+
+#Have to check if NA because not all ridings had a candidate from these parties
+if (is.na(candidate_map_41$LIB_CAND[row_to_find])){
+}else{
+poll$LIB = poll[[candidate_map_41$LIB_CAND[row_to_find]]]
+}
+
+if (is.na(candidate_map_41$CON_CAND[row_to_find])){
+}else{
+poll$CON = poll[[candidate_map_41$CON_CAND[row_to_find]]]
+}
+
+if (is.na(candidate_map_41$NDP_CAND[row_to_find])){
+}else{
+poll$NDP = poll[[candidate_map_41$NDP_CAND[row_to_find]]]
+}
+
+if (is.na(candidate_map_41$BLOC_CAND[row_to_find])){
+}else{
+poll$BLOC = poll[[candidate_map_41$BLOC_CAND[row_to_find]]]
+}
+
+if (is.na(candidate_map_41$GREEN_CAND[row_to_find])){
+}else{
+poll$GREEN = poll[[candidate_map_41$GREEN_CAND[row_to_find]]]
+}
+
+
+poll <- poll[!(poll$LIB %in% c("Invalid Number", "Void/Supprimé")), ]
+
+poll$dictionary <- paste(poll$'Electoral District Number/Numéro de circonscription',poll$'Polling Station Number/Numéro du bureau de scrutin') #concatinating station and riding number for matching
+
+poll$place <- Dictionary41$Place[match(poll$dictionary,Dictionary41$Station)] #Matching polling place id's to stations
+
+
+#Iterate across data frame to find total vote count and votes for elected candidate
+for (j in 1:nrow(poll)) {
+    #Write absolute turnout
+    Results41$TurnoutAbs[poll$place[j]] = Results41$TurnoutAbs[poll$place[j]] + poll$'Total Votes/Total des votes'[j]
+    
+    if ("LIB" %in% colnames(poll)) {
+    #Write liberal votes
+    Results41$LIB[poll$place[j]] = Results41$LIB[poll$place[j]] + as.numeric(poll$LIB[j])
+    }
+
+    if ("CON" %in% colnames(poll)) {
+    #Write conservative votes
+    Results41$CON[poll$place[j]] = Results41$CON[poll$place[j]] + as.numeric(poll$CON[j])
+    }
+
+    if ("NDP" %in% colnames(poll)) {
+    #Write NDP votes
+    Results41$NDP[poll$place[j]] = Results41$NDP[poll$place[j]] + as.numeric(poll$NDP[j])
+    }
+
+    if ("BLOC" %in% colnames(poll)) {
+    #Write Bloc votes
+    Results41$BLOC[poll$place[j]] = Results41$BLOC[poll$place[j]] + as.numeric(poll$BLOC[j])
+    }
+
+    if ("GREEN" %in% colnames(poll)) {
+    #Write Green votes
+    Results41$GREEN[poll$place[j]] = Results41$GREEN[poll$place[j]] + as.numeric(poll$GREEN[j])
+    }
+
+    }  
+
+}
+
+print(i)
+
+colnames(poll)
+
+
+
+
+
+
+
 
 association <- read_csv("41ResultsRAW/table_tableau11.csv", locale = locale(encoding = "ISO-8859-1"))
 

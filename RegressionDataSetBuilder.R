@@ -17,21 +17,32 @@ df_42Data <- read.csv("42Results.csv")
 #First initialize new column
 df_42Data$Riding41 <- 0
 
+#This column is the riding when matching was only approximate
+df_42Data$Riding41Approx <- 0
+
 for (i in 1:nrow(df_42Data)) {
   #Find which index corresponds to each polling place
     row_to_find = which(df_filter$ED_CODE == df_42Data$Riding[i])
 
     #Assign the value of Direct.Match to the corresponding row in df_42Data
     df_42Data$Riding41[i] = df_filter$Direct.Match[row_to_find]
+
+    #Now repeat for the approx match as well
+    df_42Data$Riding41Approx[i] = df_filter$Approx.Match[row_to_find]
 }
 
-#Now, remove any entries from a riding that doesn't have a match (not considered)
-df_42Data<- df_42Data %>% filter(Riding41 != "#N/A")
+
+# #Now, remove any entries from a riding that doesn't have a match (not considered)
+# df_42Data_All <- df_42Data %>% filter(Riding41Approx != "#N/A") #This one considers approx locations as well
+
+# df_42Data <- df_42Data %>% filter(Riding41 != "#N/A")
 
 
 #Now, pair with data on elected candidates in 41st election
 #This data is contained in table-11 of official election data
-df_table11_41 <- read.csv("41ResultsRAW/table_tableau11.csv")
+df_table11_41 <- read.csv("41ResultsRAW/table_tableau11.csv", encoding = "latin1", stringsAsFactors = FALSE)
+
+
 
 parties_listed <-c("Liberal","Conservative","NDP","Green","Bloc")
 parties_tag <- c("LIB","CON","NDP","GREEN","BLOC")
@@ -56,15 +67,33 @@ sum(df_table11_41 == 0) #Check if any were unassigned - means they were independ
 
 #Initialize incumbent column in results dataframe
 df_42Data$Incumbent <- 0
-
+df_42Data$IncumbentCand <- 0
+df_42Data$PrevIncumbent <- 0
+df_42Data$PrevIncumbentCand <- 0
 
 for (i in 1:nrow(df_42Data)) {
   #Find which index corresponds to each polling place
-    row_to_find = which(df_table11_41$Electoral.District.Number.Numero.de.circonscription == df_42Data$Riding41[i])
+  row_to_find = which(df_table11_41$Electoral.District.Number.Numero.de.circonscription == df_42Data$Riding41Approx[i])
 
-    #Assign the value of Direct.Match to the corresponding row in df_42Data
-    df_42Data$Incumbent[i] = df_table11_41$Elected[row_to_find]
+  if (length(row_to_find) != 0) { 
+  #Assign the value of Direct.Match to the corresponding row in df_42Data
+  df_42Data$Incumbent[i] = df_table11_41$Elected[row_to_find]
+
+  df_42Data$IncumbentCand[i] <- df_table11_41$Elected.Candidate.Candidat.elu[row_to_find]
+  }
+
+  #Find which index corresponds to each polling place for PREVIOUS election (will only be different form above for IsNew = 1)
+  row_to_find = which(df_table11_41$Electoral.District.Number.Numero.de.circonscription == df_42Data$PrevRidingNo[i])
+
+  if (length(row_to_find) != 0) { 
+  #Assign the incumbent and incumbnet cand for OLD riding (only will be different from above if IsNew = 1)
+  df_42Data$PrevIncumbent[i] = df_table11_41$Elected[row_to_find]
+
+  df_42Data$PrevIncumbentCand[i] <- df_table11_41$Elected.Candidate.Candidat.elu[row_to_find]
+  }
+  
 }
+
 
 #Now, find vote share of incumbent party
 #Vote share is defined as vote for party/total turnout
@@ -76,20 +105,106 @@ df_42Data$IncumbentShare <- 0
 for (i in 1:nrow(df_42Data)){
     IncumbentParty = df_42Data$Incumbent[i] #Find incumbent party for each polling place
     VoteShare = df_42Data[[IncumbentParty]][i]/df_42Data$TurnoutAbs[i] #Find vote share of incumbent party at polling place
+      
+    if (length(VoteShare) != 0) { 
+    #Assign the value of Direct.Match to the corresponding row in df_42Data
     df_42Data$IncumbentShare[i] = VoteShare #Write vote share to the resepective row
+    } 
 }
 
-#Create filtered Df to run first regression - only include located polling places
-df_42Data_Filtered = df_42Data %>% filter(Located != 0)
+
+#Finally, drop all NA observations (only include those at least located approximately)
+df_42Data <- df_42Data %>% filter(Riding41Approx != "#N/A")
+
+
+
+#Truncate the IncumbCand to remove party affiliation
+
+#Function for this:
+truncate_string <- function(input_string, keyword) {
+  pos <- regexpr(keyword, input_string)
+  if (pos != -1) {
+    return(substr(input_string, 1, pos - 2))
+  } else {
+    return(input_string)
+  }
+}
+
+#Now iterate across data frame
+#Named vector for association
+party_reference <- c("LIB" = "Liberal", "NDP" = "NDP", "CON" = "Conservative", "BLOC" = "Bloc", "GREEN" = "Green")
+
+for (i in seq_len(nrow(df_42Data))) {
+  # Find respective party given value in Incumbent column
+  incumbent <- df_42Data$Incumbent[i]
+  
+  if (incumbent %in% names(party_reference)) {
+    party <- party_reference[incumbent]
+  } else {
+    party <- NA  # Handle cases where the incumbent is not in the party reference
+  }
+  
+  # Truncate incumbent candidate if party is found
+  if (!is.na(party)) {
+    df_42Data$IncumbentCand[i] <- truncate_string(df_42Data$IncumbentCand[i], party)
+  }
+
+  #Repeat for previous incumbent
+  incumbent <- df_42Data$PrevIncumbent[i]
+  
+  if (incumbent %in% names(party_reference)) {
+    party <- party_reference[incumbent]
+  } else {
+    party <- NA  # Handle cases where the incumbent is not in the party reference
+  }
+  
+  # Truncate incumbent candidate if party is found
+  if (!is.na(party)) {
+    df_42Data$PrevIncumbentCand[i] <- truncate_string(df_42Data$PrevIncumbentCand[i], party)
+  }
+
+
+
+}
+
+#Create filtered Df - only include located polling places
+df_42Data = df_42Data %>% filter(Located != 0)
+
+
+#Now iterate through the data frame and see which should be included or not
+#Included entries are either: Old polling places that had both the same party and candidate
+#OR New polling places that have a new candidate, but the same party
+#This allows for the isolation of Personal incumbency bias
+
+df_42Data$ToInclude = 0 #Initialise include dummy at 0
+
+
+for (i in 1:nrow(df_42Data)) {
+
+  party =  df_42Data$Incumbent[i]
+  candidate = paste0(party,"_CAND")
+
+  if (df_42Data$IsNew[i] == 0 & df_42Data$IncumbentCand[i] == df_42Data[[candidate]][i]
+    |  df_42Data$IsNew[i] == 1 & df_42Data$Incumbent[i] == df_42Data$PrevIncumbent[i]){
+    df_42Data$ToInclude[i] = 1
+  }
+
+}
+
 
 #######################################################
+
+#######################################################
+
+#######################################################
+
 #Now include previous poll results to see if they predict turnout now
 
 #First, import results 41
 df_41Data <- read.csv("41Results.csv")
 
 #Now, remove any entries that have NA entries in their turnout
-df_41Data<- df_41Data %>% filter(TurnoutRel != "#N/A")
+df_41Data<- df_41Data %>% filter(TurnoutAbs != "Invalid Number")
 
 
 #Now need to map polling places from 41 to 42 by name of polling place
@@ -176,28 +291,72 @@ for (i in 1:nrow(df_42Dict)){ #Iterate across dictionary to assign address to ea
 #Now drop all rows with 0 in Match41
 df_42Dict = df_42Dict %>% filter(Match41 != 0)
 
-#Now, find the incumbent vote share FUCK I can't do that with my data because it only captures the vote share for the person who won the previous election, so if someone was moved to a riding where the incumbent party changed then it won't work.
+#### Now need to add incumbent party to to the table (incumbent in 42nd election riding)
+df_42Dict$Incumbent <- 0
+for (i in 1:nrow(df_42Dict)){ #Iterate across dictionary to assign address to each polling place
+    row_to_find = which(df_42Data$Place == df_42Dict$Place[i])
 
-#For now - find attrition if we used historic data
-
-#Initialise place41 row
-df_42Data_Filtered$Place41 = 0
-
-for (i in 1:nrow(df_42Data_Filtered)) {
-  #Find which index corresponds to each polling place
-  row_to_find = which(df_42Dict$Place == df_42Data_Filtered$Place[i])
-  if (length(row_to_find) == 0){
-    df_42Data_Filtered$Place41[i] = 0
-  } else {
-  df_42Data_Filtered$Place41[i] = df_42Dict$Match41[row_to_find]
-  }
+      if (length(row_to_find) != 0){
+      df_42Dict$Incumbent[i] = df_42Data$Incumbent[row_to_find]
+      }
 }
+
+
+#Drop all where incumbent is 0
+df_42Dict <- df_42Dict %>% filter(Incumbent != 0)
+
+
+
+#Now add new column for incumbent vote share in prev. election
+df_42Data$PrevIncVoteShare = 0
+
+  for (i in 1:nrow(df_42Dict)){ #Iterate across dictionary to assign address to each polling place
+        #Find row for place from 41st election
+        row_to_find = which(df_41Data$Place == df_42Dict$Match[i])
+
+        if (length(row_to_find) != 0){
+        #Find incumbent party
+        Incumbnet = df_42Dict$Incumbent[i]
+
+        #Compute vote share of incumbent party
+        VoteShare = df_41Data[[Incumbnet]][row_to_find]/df_41Data$TurnoutAbs[row_to_find]
+
+        #Now find relevant row in df_42Data
+        row_to_find = which(df_42Data$Place == df_42Dict$Place[i])
+
+        #Write vote share to df_42Data
+        df_42Data$PrevIncVoteShare[row_to_find] = VoteShare
+        }
+  }
+
+df_42Data$PrevIncVoteShare[df_42Data$PrevIncVoteShare == 0] <- NA #Change all 0s to NA
+
+
+
+
+# #For now - find attrition if we used historic data
+
+# #Initialise place41 row
+# df_42Data_Filtered$Place41 = 0
+
+# for (i in 1:nrow(df_42Data_Filtered)) {
+#   #Find which index corresponds to each polling place
+#   row_to_find = which(df_42Dict$Place == df_42Data_Filtered$Place[i])
+#   if (length(row_to_find) == 0){
+#     df_42Data_Filtered$Place41[i] = 0
+#   } else {
+#   df_42Data_Filtered$Place41[i] = df_42Dict$Match41[row_to_find]
+#   }
+# }
+
+
+
 
 
 ##################################
 
-
-
+#Filter further so that only directly matched ridings are included and they have ToInclude = 1
+df_42Data_Filtered = df_42Data %>% filter(Riding41 != '#N/A') %>% filter(ToInclude == 1)
 
 
 
@@ -212,6 +371,37 @@ summary(model1)
 #Model 2 - includes riding level fixed effects
 model2 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data_Filtered)
 summary(model2)
+
+#Model 3 - includes riding level fixed effects + Past vote share
+model3 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare, data = df_42Data_Filtered)
+summary(model3)
+
+#Model 4 - includes riding level fixed effects + Past vote share
+model4 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare, data = df_42Data_Filtered)
+summary(model4)
+
+
+library(stargazer)
+
+
+stargazer(model0, model1, model2, model3, model4,
+          keep = c('Constant','IsNew', 'PrevIncVoteShare'),
+          omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
+          title = "Linear Regression Model Results",
+          align = TRUE)  # Align coefficients
+
+
+
+temp  <- df_42Data_Filtered[!is.na(df_42Data_Filtered$PrevIncVoteShare), ]
+
+sum(temp$IsNew)
+#Now run the models restricted to only those that 
+
+
+
+
+
+
 
 
 
@@ -397,8 +587,6 @@ cat(" Attrition from matching to 41 =",1-sum(df_42Data_Filtered$Place41!=0)/nrow
 cat(" Attrition from matching to 41 with precise data =",1-sum(df_42Data_Filtered_Precise$Place41!=0)/nrow(df_42Data_Filtered_Precise))
 
 
-install.packages("stargazer")
-library(stargazer)
 
 stargazer(model0, model1, model2,
           keep = c('Constant','IsNew'),
@@ -416,8 +604,6 @@ stargazer(model3, model4, model5,
 
 
 
-#Fix small bug - should be removed later!!!!!!!!!!
-df_42Data_Filtered$IsNew[1] = 0
 
 #Create data frame to store data on distribution of polling places and new-places by riding
 

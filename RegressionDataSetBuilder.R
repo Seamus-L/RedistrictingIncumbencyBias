@@ -334,24 +334,6 @@ df_42Data$PrevIncVoteShare[df_42Data$PrevIncVoteShare == 0] <- NA #Change all 0s
 
 
 
-# #For now - find attrition if we used historic data
-
-# #Initialise place41 row
-# df_42Data_Filtered$Place41 = 0
-
-# for (i in 1:nrow(df_42Data_Filtered)) {
-#   #Find which index corresponds to each polling place
-#   row_to_find = which(df_42Dict$Place == df_42Data_Filtered$Place[i])
-#   if (length(row_to_find) == 0){
-#     df_42Data_Filtered$Place41[i] = 0
-#   } else {
-#   df_42Data_Filtered$Place41[i] = df_42Dict$Match41[row_to_find]
-#   }
-# }
-
-
-
-
 
 ##################################
 
@@ -362,30 +344,30 @@ df_42Data_Filtered = df_42Data %>% filter(Riding41 != '#N/A') %>% filter(ToInclu
 
 #Model 0 - basic without any additional fixed effects
 model0 = lm(IncumbentShare ~ IsNew, data = df_42Data_Filtered)
-summary(model0)
+# summary(model0)
 
 #Model 1 - basic without riding level fixed effects, but including party effects
 model1 = lm(IncumbentShare ~ Incumbent + IsNew, data = df_42Data_Filtered)
-summary(model1)
+# summary(model1)
 
 #Model 2 - includes riding level fixed effects
 model2 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data_Filtered)
-summary(model2)
+# summary(model2)
 
 #Model 3 - includes riding level fixed effects + Past vote share
 model3 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare, data = df_42Data_Filtered)
-summary(model3)
+# summary(model3)
 
 #Model 4 - includes riding level fixed effects + Past vote share
 model4 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare, data = df_42Data_Filtered)
-summary(model4)
+# summary(model4)
 
 
 library(stargazer)
 
 
-stargazer(model0, model1, model2, model3, model4,
-          keep = c('Constant','IsNew', 'PrevIncVoteShare'),
+stargazer(model0, model1, model2, model4, model3,
+          keep = c('IsNew', 'PrevIncVoteShare'),
           omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
           title = "Linear Regression Model Results",
           align = TRUE)  # Align coefficients
@@ -394,34 +376,36 @@ stargazer(model0, model1, model2, model3, model4,
 
 temp  <- df_42Data_Filtered[!is.na(df_42Data_Filtered$PrevIncVoteShare), ]
 
-sum(temp$IsNew)
-#Now run the models restricted to only those that 
-
-
-
-
-
-
-
-
 
 #Filter to only include PRECISE locations
 #Create filtered Df to run first regression - only include located polling places
 df_42Data_Filtered_Precise = df_42Data_Filtered %>% filter(Precise == 1)
 
 #Model 0 - basic without any additional fixed effects
-model3 = lm(IncumbentShare ~ IsNew, data = df_42Data_Filtered_Precise)
-summary(model3)
+model5 = lm(IncumbentShare ~ IsNew, data = df_42Data_Filtered_Precise)
+# summary(model3)
 
 #Model 1 - basic without riding level fixed effects, but including party effects
-model4 = lm(IncumbentShare ~ Incumbent + IsNew, data = df_42Data_Filtered_Precise)
-summary(model4)
+model6 = lm(IncumbentShare ~ Incumbent + IsNew, data = df_42Data_Filtered_Precise)
+# summary(model4)
 
 #Model 2 - includes riding level fixed effects
-model5 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data_Filtered_Precise)
-summary(model5)
+model7 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data_Filtered_Precise)
+# summary(model5)
 
+#Model 3 - includes riding level fixed effects + Past vote share
+model8 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare, data = df_42Data_Filtered_Precise)
+# summary(model7)
 
+#Model 4 - includes riding level fixed effects + Past vote share
+model9 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare, data = df_42Data_Filtered_Precise)
+# summary(model7)
+
+stargazer(model5, model6, model7, model9, model8,
+          keep = c('IsNew', 'PrevIncVoteShare'),
+          omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
+          title = "Linear Regression Model Results - Precise Locations",
+          align = TRUE)  # Align coefficients
 
 
 
@@ -541,19 +525,23 @@ parties_colours2 = c("LIB" = "#d71920","CON" = "#003F72","NDP" = "#F58220","GREE
 plot1 <- ggplot(df_42Data_Filtered_Winner, aes(x = VoteShare, y = CompVoteShare, colour = Winner)) +
   geom_point(size = 3) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black", size = 1) +
-  labs(title = "Computed vs Actual Vote Share of Winner",
+  labs(title = "",
        x = "Actual Vote Share of Winner",
        y = "Computed Vote Share of Winner") +
   xlim(30, 80) +
   ylim(30, 80) +
   scale_color_manual(values = parties_colours2)+
   labs(colour = "Party") +
+  theme_minimal() +
   theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),    
     legend.position = c(0.98, .5),
     legend.justification = c("right", "top"),
     legend.box.just = "right",
     legend.margin = margin(6, 6, 6, 6)
-    )
+  ) 
+ 
 
 
 
@@ -561,14 +549,17 @@ plot1 <- ggplot(df_42Data_Filtered_Winner, aes(x = VoteShare, y = CompVoteShare,
 plot2 <- ggplot(df_42Data_Filtered_Winner, aes(x = VoteShare, y = PreciseCompVoteShare, colour = Winner)) +
   geom_point(size = 3) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black", size = 1) +
-  labs(title = "Computed vs Actual Vote Share of Winner: Precise",
+  labs(title = "",
        x = "Actual Vote Share of Winner",
        y = "Computed Vote Share of Winner") +
   xlim(30, 80) +
   ylim(30, 80) +
   scale_color_manual(values = parties_colours2)+
   labs(colour = "Party") +
+  theme_minimal() +
   theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
     legend.position = c(0.98, .5),
     legend.justification = c("right", "top"),
     legend.box.just = "right",

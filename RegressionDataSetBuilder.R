@@ -334,12 +334,10 @@ df_42Data$PrevIncVoteShare[df_42Data$PrevIncVoteShare == 0] <- NA #Change all 0s
 
 
 
-
 ##################################
 
 #Filter further so that only directly matched ridings are included and they have ToInclude = 1
 df_42Data_Filtered = df_42Data %>% filter(Riding41 != '#N/A') %>% filter(ToInclude == 1)
-
 
 
 #Model 0 - basic without any additional fixed effects
@@ -374,7 +372,7 @@ stargazer(model0, model1, model2, model4, model3,
 
 
 
-temp  <- df_42Data_Filtered[!is.na(df_42Data_Filtered$PrevIncVoteShare), ]
+# temp  <- df_42Data_Filtered[!is.na(df_42Data_Filtered$PrevIncVoteShare), ]
 
 
 #Filter to only include PRECISE locations
@@ -409,7 +407,75 @@ stargazer(model5, model6, model7, model9, model8,
 
 
 
+##############################
+#REPEAT ABOVE TO GET PARTY + PERSONAL INCUMBENCY ADVANTAGE
 
+#Model 0 - basic without any additional fixed effects
+model10 = lm(IncumbentShare ~ IsNew, data = df_42Data)
+# summary(model0)
+
+#Model 1 - basic without riding level fixed effects, but including party effects
+model11 = lm(IncumbentShare ~ Incumbent + IsNew, data = df_42Data)
+# summary(model1)
+
+#Model 2 - includes riding level fixed effects
+model12 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data)
+# summary(model2)
+
+#Model 3 - includes riding level fixed effects + Past vote share
+model13 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare, data = df_42Data)
+# summary(model3)
+
+#Model 4 - includes riding level fixed effects + Past vote share
+model14 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare, data = df_42Data)
+# summary(model4)
+
+
+library(stargazer)
+
+
+stargazer(model10, model11, model12, model14, model13,
+          keep = c('IsNew', 'PrevIncVoteShare'),
+          omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
+          title = "Party + Personal Linear Regression Model Results",
+          align = TRUE)  # Align coefficients
+
+
+
+
+
+df_42Data_Precise = df_42Data %>% filter(Precise == 1)
+
+
+#Filter to only include PRECISE locations
+#Create filtered Df to run first regression - only include located polling places
+df_42Data_Filtered_Precise = df_42Data_Filtered %>% filter(Precise == 1)
+
+#Model 0 - basic without any additional fixed effects
+model15 = lm(IncumbentShare ~ IsNew, data = df_42Data_Precise)
+# summary(model3)
+
+#Model 1 - basic without riding level fixed effects, but including party effects
+model16 = lm(IncumbentShare ~ Incumbent + IsNew, data = df_42Data_Precise)
+# summary(model4)
+
+#Model 2 - includes riding level fixed effects
+model17 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data_Precise)
+# summary(model5)
+
+#Model 3 - includes riding level fixed effects + Past vote share
+model18 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare, data = df_42Data_Precise)
+# summary(model7)
+
+#Model 4 - includes riding level fixed effects + Past vote share
+model19 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare, data = df_42Data_Precise)
+# summary(model7)
+
+stargazer(model15, model16, model17, model19, model18,
+          keep = c('IsNew', 'PrevIncVoteShare'),
+          omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
+          title = "Linear Regression Model Results - Precise Locations",
+          align = TRUE)  # Align coefficients
 
 ###############################################
 #Robustness checker

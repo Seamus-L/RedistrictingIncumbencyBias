@@ -173,7 +173,7 @@ df_42Data = df_42Data %>% filter(Located != 0)
 
 #Now iterate through the data frame and see which should be included or not
 #Included entries are either: Old polling places that had both the same party and candidate
-#OR New polling places that have a new candidate, but the same party
+#AND New polling places that have a new candidate, but the same party
 #This allows for the isolation of Personal incumbency bias
 
 df_42Data$ToInclude = 0 #Initialise include dummy at 0
@@ -190,6 +190,26 @@ for (i in 1:nrow(df_42Data)) {
   }
 
 }
+
+#Now iterate through the data frame and see which should be included or not
+#Only need to consider New polling places that have a new candidate, but the same party
+#This allows for the measure of personal + party incumbency advantage, because it candidates that aren't personal incumbents, but are party incumbents
+
+df_42Data$ToIncludeTotalEffect = 0 #Initialise include dummy at 0
+
+
+for (i in 1:nrow(df_42Data)) {
+
+  party =  df_42Data$Incumbent[i]
+  candidate = paste0(party,"_CAND")
+
+  if (df_42Data$IsNew[i] == 0
+    |  df_42Data$IsNew[i] == 1 & df_42Data$Incumbent[i] == df_42Data$PrevIncumbent[i]){
+    df_42Data$ToIncludeTotalEffect[i] = 1
+  }
+
+}
+
 
 
 #######################################################
@@ -353,11 +373,11 @@ model2 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Dat
 # summary(model2)
 
 #Model 3 - includes riding level fixed effects + Past vote share
-model3 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare, data = df_42Data_Filtered)
+model3 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare + PrevIncVoteShare*IsNew, data = df_42Data_Filtered)
 # summary(model3)
 
 #Model 4 - includes riding level fixed effects + Past vote share
-model4 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare, data = df_42Data_Filtered)
+model4 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare + PrevIncVoteShare*IsNew, data = df_42Data_Filtered)
 # summary(model4)
 
 
@@ -365,7 +385,7 @@ library(stargazer)
 
 
 stargazer(model0, model1, model2, model4, model3,
-          keep = c('IsNew', 'PrevIncVoteShare'),
+          keep = c('IsNew', 'PrevIncVoteShare','PrevIncVoteShare:IsNew'),
           omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
           title = "Linear Regression Model Results",
           align = TRUE)  # Align coefficients
@@ -392,15 +412,15 @@ model7 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Dat
 # summary(model5)
 
 #Model 3 - includes riding level fixed effects + Past vote share
-model8 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare, data = df_42Data_Filtered_Precise)
+model8 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare + PrevIncVoteShare*IsNew, data = df_42Data_Filtered_Precise)
 # summary(model7)
 
 #Model 4 - includes riding level fixed effects + Past vote share
-model9 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare, data = df_42Data_Filtered_Precise)
+model9 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare + PrevIncVoteShare*IsNew, data = df_42Data_Filtered_Precise)
 # summary(model7)
 
 stargazer(model5, model6, model7, model9, model8,
-          keep = c('IsNew', 'PrevIncVoteShare'),
+          keep = c('IsNew', 'PrevIncVoteShare','PrevIncVoteShare:IsNew'),
           omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
           title = "Linear Regression Model Results - Precise Locations",
           align = TRUE)  # Align coefficients
@@ -410,24 +430,28 @@ stargazer(model5, model6, model7, model9, model8,
 ##############################
 #REPEAT ABOVE TO GET PARTY + PERSONAL INCUMBENCY ADVANTAGE
 
+
+df_42Data_PartyPers <- df_42Data %>% filter(ToIncludeTotalEffect == 1)
+
+
 #Model 0 - basic without any additional fixed effects
-model10 = lm(IncumbentShare ~ IsNew, data = df_42Data)
+model10 = lm(IncumbentShare ~ IsNew, data = df_42Data_PartyPers)
 # summary(model0)
 
 #Model 1 - basic without riding level fixed effects, but including party effects
-model11 = lm(IncumbentShare ~ Incumbent + IsNew, data = df_42Data)
+model11 = lm(IncumbentShare ~ Incumbent + IsNew, data = df_42Data_PartyPers)
 # summary(model1)
 
 #Model 2 - includes riding level fixed effects
-model12 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data)
+model12 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Data_PartyPers)
 # summary(model2)
 
 #Model 3 - includes riding level fixed effects + Past vote share
-model13 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare, data = df_42Data)
+model13 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare + PrevIncVoteShare*IsNew, data = df_42Data_PartyPers)
 # summary(model3)
 
 #Model 4 - includes riding level fixed effects + Past vote share
-model14 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare, data = df_42Data)
+model14 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare + PrevIncVoteShare*IsNew, data = df_42Data_PartyPers)
 # summary(model4)
 
 
@@ -435,7 +459,7 @@ library(stargazer)
 
 
 stargazer(model10, model11, model12, model14, model13,
-          keep = c('IsNew', 'PrevIncVoteShare'),
+          keep = c('IsNew', 'PrevIncVoteShare','PrevIncVoteShare:IsNew'),
           omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
           title = "Party + Personal Linear Regression Model Results",
           align = TRUE)  # Align coefficients
@@ -443,8 +467,7 @@ stargazer(model10, model11, model12, model14, model13,
 
 
 
-
-df_42Data_Precise = df_42Data %>% filter(Precise == 1)
+df_42Data_Precise = df_42Data_PartyPers %>% filter(Precise == 1)
 
 
 #Filter to only include PRECISE locations
@@ -464,15 +487,15 @@ model17 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew, data = df_42Da
 # summary(model5)
 
 #Model 3 - includes riding level fixed effects + Past vote share
-model18 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare, data = df_42Data_Precise)
+model18 = lm(IncumbentShare ~ Incumbent + factor(Riding) + IsNew + PrevIncVoteShare + PrevIncVoteShare*IsNew, data = df_42Data_Precise)
 # summary(model7)
 
 #Model 4 - includes riding level fixed effects + Past vote share
-model19 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare, data = df_42Data_Precise)
+model19 = lm(IncumbentShare ~ IsNew + PrevIncVoteShare + PrevIncVoteShare*IsNew, data = df_42Data_Precise)
 # summary(model7)
 
 stargazer(model15, model16, model17, model19, model18,
-          keep = c('IsNew', 'PrevIncVoteShare'),
+          keep = c('IsNew', 'PrevIncVoteShare','PrevIncVoteShare:IsNew'),
           omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
           title = "Linear Regression Model Results - Precise Locations",
           align = TRUE)  # Align coefficients

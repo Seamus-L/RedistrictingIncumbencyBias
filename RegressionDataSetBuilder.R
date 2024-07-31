@@ -167,6 +167,9 @@ for (i in seq_len(nrow(df_42Data))) {
 
 }
 
+View(df_42Data)
+sum(df_42Data$Located)
+
 #Create filtered Df - only include located polling places
 df_42Data = df_42Data %>% filter(Located != 0)
 
@@ -656,6 +659,13 @@ plot2 <- ggplot(df_42Data_Filtered_Winner, aes(x = VoteShare, y = PreciseCompVot
     )
 
 
+AttritionModel1 = lm(CompVoteShare ~ VoteShare, data = df_42Data_Filtered_Winner)
+
+AttritionModel2 = lm(PreciseCompVoteShare ~ VoteShare, data = df_42Data_Filtered_Winner)
+
+summary(AttritionModel1)
+summary(AttritionModel2)
+
 
 
 #Export plots
@@ -665,23 +675,6 @@ ggsave("plot2.png", plot = plot2, width = 6, height = 4, dpi = 300)
 cat(" Attrition from matching to 41 =",1-sum(df_42Data_Filtered$Place41!=0)/nrow(df_42Data_Filtered))
 
 cat(" Attrition from matching to 41 with precise data =",1-sum(df_42Data_Filtered_Precise$Place41!=0)/nrow(df_42Data_Filtered_Precise))
-
-
-
-stargazer(model0, model1, model2,
-          keep = c('Constant','IsNew'),
-          omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
-          title = "Linear Regression Model Results",
-          align = TRUE)  # Align coefficients
-
-
-
-stargazer(model3, model4, model5,
-          keep = c('Constant','IsNew'),
-          omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
-          title = "Linear Regression Model Results",
-          align = TRUE)  # Align coefficients
-
 
 
 

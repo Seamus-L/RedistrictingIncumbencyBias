@@ -264,28 +264,39 @@ for (i in 2:nrow(df)){ #Iterate through dataframe to populate whether or not the
 }
 
 df_regression <- df %>% filter(MVPrev >= -15 & MVPrev <= 15) #Restricted to 15% bandwidth around MV = 0 following Rekkas
-# %>% filter(RidingPersInc == 1) %>% filter(MVPrev >= -15 & MVPrev <= 15)
 
 
+df_regression_alt <- df %>% filter(MVPrev >= -10 & MVPrev <= 10) #Restricted to 10% bandwidth around MV = 0
 
 #Model 1 - uses full data set
 model1 = lm(VS ~ factor(Party) + DPrev + MVPrev + DPrev*MVPrev + RidingPersInc + DPrev*RidingPersInc + DPrev*MVPrev*RidingPersInc, data = df_regression)
 summary(model1)
 
 
+#Model 1 - uses full data set
+model3 = lm(VS ~ factor(Party) + DPrev + MVPrev + DPrev*MVPrev + RidingPersInc + DPrev*RidingPersInc + DPrev*MVPrev*RidingPersInc, data = df_regression_alt)
+summary(model1)
+
 
 df_42 <- df %>% filter(Elec42 == 1) #Restrict to only include 42nd election to compare to redistricting results
 
 df_regression_42 <- df_regression %>% filter(Elec42 == 1)
+
+df_regression_alt_42 <- df_regression_alt %>% filter(Elec42 == 1)
 
 #Model 2 - restrict to 42nd election
 model2 = lm(VS ~ factor(Party) + DPrev + MVPrev + DPrev*MVPrev + RidingPersInc + DPrev*RidingPersInc + DPrev*MVPrev*RidingPersInc, data = df_regression_42)
 summary(model2)
 
 
+#Model 2 - restrict to 42nd election
+model4 = lm(VS ~ factor(Party) + DPrev + MVPrev + DPrev*MVPrev + RidingPersInc + DPrev*RidingPersInc + DPrev*MVPrev*RidingPersInc, data = df_regression_alt_42)
+summary(model2)
+
+
 library(stargazer)
 
-stargazer(model1, model2,
+stargazer(model1, model3, model2, model4,
           keep = c('DPrev', 'MVPrev', 'RidingPersInc', 'Dprev:RidingPersInc'),
           omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
           title = "RD Design - 15% Bandwidth",
@@ -511,8 +522,309 @@ print(plot2)
 
 
 
-combinedplot <- plot1 | plot2
+combinedplot <- plot1 | plot2 
 
 ggsave("CombinedPlot1.png", plot = combinedplot, width = 6, height = 3, dpi = 300)
+
+
+
+
+#Repeat for 10% interval
+FE_Con = as.numeric(model3$coefficients[2])
+FE_Green = as.numeric(model3$coefficients[3])
+FE_Lib = as.numeric(model3$coefficients[4])
+FE_NDP = as.numeric(model3$coefficients[5])
+
+#Create list to associate fixed effects
+FE = list(
+    'CON' = FE_Con,
+    'LIB' = FE_Lib,
+    'GREEN' = FE_Green,
+    'NDP' = FE_NDP,
+    'BLOC' = 0
+)
+
+
+
+
+
+plot_df_3 <- plot_df %>%
+  mutate(VS = VS - unlist(FE[Party]))
+
+
+# Create bins and calculate midpoints
+df_binned <- plot_df_3 %>% filter(RidingPersInc == 0) %>%
+  mutate(MVPrev_bin = cut(MVPrev, 
+                          breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
+                          include.lowest = TRUE, 
+                          right = FALSE)) %>%
+  filter(!is.na(MVPrev_bin)) %>%
+  group_by(MVPrev_bin) %>%
+  summarise(mean_VS = mean(VS, na.rm = TRUE), 
+            .groups = 'drop') %>%
+  mutate(
+    bin_range = as.character(MVPrev_bin),
+    lower_bound = as.numeric(sub("\\[(-?[0-9.]+),.*\\)", "\\1", bin_range)),
+    MVPrev_mid = lower_bound + bin_width / 2
+  ) %>%
+  filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
+
+
+df_binned2 <- plot_df_3 %>% filter(RidingPersInc == 1) %>%
+  mutate(MVPrev_bin = cut(MVPrev, 
+                          breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
+                          include.lowest = TRUE, 
+                          right = FALSE)) %>%
+  filter(!is.na(MVPrev_bin)) %>%
+  group_by(MVPrev_bin) %>%
+  summarise(mean_VS = mean(VS, na.rm = TRUE), 
+            .groups = 'drop') %>%
+  mutate(
+    bin_range = as.character(MVPrev_bin),
+    lower_bound = as.numeric(sub("\\[(-?[0-9.]+),.*\\)", "\\1", bin_range)),
+    MVPrev_mid = lower_bound + bin_width / 2
+  ) %>%
+  filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
+
+
+# Fit separate models for each side of the cutoff
+model_leftN <- lm(VS ~ MVPrev, data = plot_df_3 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 0))
+model_rightN <- lm(VS ~ MVPrev, data = plot_df_3 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 0))
+model_leftY <- lm(VS ~ MVPrev, data = plot_df_3 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 1))
+model_rightY <- lm(VS ~ MVPrev, data = plot_df_3 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 1))
+
+# Create predictions for plotting
+plot_df_3 <- plot_df_3 %>%
+  mutate(fitted_leftN = ifelse(MVPrev <= cutoff, predict(model_leftN, newdata = plot_df_3), NA),
+         fitted_rightN = ifelse(MVPrev > cutoff, predict(model_rightN, newdata = plot_df_3), NA),
+         fitted_leftY = ifelse(MVPrev <= cutoff, predict(model_leftY, newdata = plot_df_3), NA),
+         fitted_rightY = ifelse(MVPrev > cutoff, predict(model_rightY, newdata = plot_df_3), NA))
+
+# Create the scatter plot with binned summary points and separate regression lines
+plot3 <- ggplot() +
+  geom_smooth(data = plot_df_3 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 0), aes(x = MVPrev, y = fitted_leftN), method = "lm", color = "black", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_3 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 0), aes(x = MVPrev, y = fitted_rightN), method = "lm", color = "black", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_3 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 1), aes(x = MVPrev, y = fitted_leftY), method = "lm", color = "red", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_3 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 1), aes(x = MVPrev, y = fitted_rightY), method = "lm", color = "red", se = FALSE, size = 0.5) +
+  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.2, alpha = 0.5, shape = 16) +
+  geom_point(data = df_binned2, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1, alpha = 0.8, shape = 0) +
+  labs(x = "Margin of Victory (%), time t-1",
+       y = "Vote Share (%), time t") +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) +
+  scale_x_continuous(limits = c(-25, 25), breaks = seq(-40, 40, by = 20)) +
+  scale_y_continuous(limits = c(0, 60), breaks = seq(0, 60, by = 20))
+
+# Display the plot
+print(plot3)
+
+
+
+
+
+
+############# REPEAT FOR YEAR RESTRICTION
+
+
+FE_Con = as.numeric(model4$coefficients[2])
+FE_Green = as.numeric(model4$coefficients[3])
+FE_Lib = as.numeric(model4$coefficients[4])
+FE_NDP = as.numeric(model4$coefficients[5])
+
+#Create list to associate fixed effects
+FE = list(
+    'CON' = FE_Con,
+    'LIB' = FE_Lib,
+    'GREEN' = FE_Green,
+    'NDP' = FE_NDP,
+    'BLOC' = 0
+)
+
+
+plot_df_4 <- plot_df_42 %>%
+  mutate(VS = VS - unlist(FE[Party]))
+
+
+
+# Create bins and calculate midpoints
+df_binned <- plot_df_4  %>% filter(RidingPersInc == 0)%>%
+  mutate(MVPrev_bin = cut(MVPrev, 
+                          breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
+                          include.lowest = TRUE, 
+                          right = FALSE)) %>%
+  filter(!is.na(MVPrev_bin)) %>%
+  group_by(MVPrev_bin) %>%
+  summarise(mean_VS = mean(VS, na.rm = TRUE), 
+            .groups = 'drop') %>%
+  mutate(
+    bin_range = as.character(MVPrev_bin),
+    lower_bound = as.numeric(sub("\\[(-?[0-9.]+),.*\\)", "\\1", bin_range)),
+    MVPrev_mid = lower_bound + bin_width / 2
+  ) %>%
+  filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
+
+
+df_binned2 <- plot_df_4 %>% filter(RidingPersInc == 1) %>%
+  mutate(MVPrev_bin = cut(MVPrev, 
+                          breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
+                          include.lowest = TRUE, 
+                          right = FALSE)) %>%
+  filter(!is.na(MVPrev_bin)) %>%
+  group_by(MVPrev_bin) %>%
+  summarise(mean_VS = mean(VS, na.rm = TRUE), 
+            .groups = 'drop') %>%
+  mutate(
+    bin_range = as.character(MVPrev_bin),
+    lower_bound = as.numeric(sub("\\[(-?[0-9.]+),.*\\)", "\\1", bin_range)),
+    MVPrev_mid = lower_bound + bin_width / 2
+  ) %>%
+  filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
+
+
+
+# Fit separate models for each side of the cutoff
+model_leftN <- lm(VS ~ MVPrev, data = plot_df_4 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 0))
+model_rightN <- lm(VS ~ MVPrev, data = plot_df_4 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 0))
+model_leftY <- lm(VS ~ MVPrev, data = plot_df_4 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 1))
+model_rightY <- lm(VS ~ MVPrev, data = plot_df_4 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 1))
+
+# Create predictions for plotting
+plot_df_4 <- plot_df_4 %>%
+  mutate(fitted_leftN = ifelse(MVPrev <= cutoff, predict(model_leftN, newdata = plot_df_4), NA),
+         fitted_rightN = ifelse(MVPrev > cutoff, predict(model_rightN, newdata = plot_df_4), NA),
+         fitted_leftY = ifelse(MVPrev <= cutoff, predict(model_leftY, newdata = plot_df_4), NA),
+         fitted_rightY = ifelse(MVPrev > cutoff, predict(model_rightY, newdata = plot_df_4), NA))
+
+# Create the scatter plot with binned summary points and separate regression lines
+plot4 <- ggplot() +
+  geom_smooth(data = plot_df_4 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 0), aes(x = MVPrev, y = fitted_leftN), method = "lm", color = "black", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_4 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 0), aes(x = MVPrev, y = fitted_rightN), method = "lm", color = "black", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_4 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 1), aes(x = MVPrev, y = fitted_leftY), method = "lm", color = "red", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_4 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 1), aes(x = MVPrev, y = fitted_rightY), method = "lm", color = "red", se = FALSE, size = 0.5) +
+  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.2, alpha = .5, shape = 16) +
+  geom_point(data = df_binned2, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1, alpha = .8, shape = 0) +
+  labs(x = "Margin of Victory (%), time t-1",
+       y = "Vote Share (%), time t") +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) +
+  scale_x_continuous(limits = c(-25, 25), breaks = seq(-40, 40, by = 20)) +
+  scale_y_continuous(limits = c(0, 60), breaks = seq(0, 60, by = 20))
+
+# Display the plot
+print(plot4)
+
+
+library(patchwork)
+
+
+combinedplot2 <- (plot1 | plot2) / (plot3 | plot4)
+
+ggsave("CombinedPlot2.png", plot = combinedplot2, width = 6, height = 6, dpi = 300)
+
+
+
+
+
+
+
+
+
+
+# Plot 4 for 10% interval and restricted year
+FE_Con = as.numeric(model4$coefficients[2])
+FE_Green = as.numeric(model4$coefficients[3])
+FE_Lib = as.numeric(model4$coefficients[4])
+FE_NDP = as.numeric(model4$coefficients[5])
+
+# Create list to associate fixed effects
+FE = list(
+    'CON' = FE_Con,
+    'LIB' = FE_Lib,
+    'GREEN' = FE_Green,
+    'NDP' = FE_NDP,
+    'BLOC' = 0
+)
+
+plot_df_4 <- plot_df_42 %>%
+  mutate(VS = VS - unlist(FE[Party]))
+
+# Create bins and calculate midpoints
+df_binned <- plot_df_4 %>% filter(RidingPersInc == 0) %>%
+  mutate(MVPrev_bin = cut(MVPrev, 
+                          breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
+                          include.lowest = TRUE, 
+                          right = FALSE)) %>%
+  filter(!is.na(MVPrev_bin)) %>%
+  group_by(MVPrev_bin) %>%
+  summarise(mean_VS = mean(VS, na.rm = TRUE), 
+            .groups = 'drop') %>%
+  mutate(
+    bin_range = as.character(MVPrev_bin),
+    lower_bound = as.numeric(sub("\\[(-?[0-9.]+),.*\\)", "\\1", bin_range)),
+    MVPrev_mid = lower_bound + bin_width / 2
+  ) %>%
+  filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
+
+df_binned2 <- plot_df_4 %>% filter(RidingPersInc == 1) %>%
+  mutate(MVPrev_bin = cut(MVPrev, 
+                          breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
+                          include.lowest = TRUE, 
+                          right = FALSE)) %>%
+  filter(!is.na(MVPrev_bin)) %>%
+  group_by(MVPrev_bin) %>%
+  summarise(mean_VS = mean(VS, na.rm = TRUE), 
+            .groups = 'drop') %>%
+  mutate(
+    bin_range = as.character(MVPrev_bin),
+    lower_bound = as.numeric(sub("\\[(-?[0-9.]+),.*\\)", "\\1", bin_range)),
+    MVPrev_mid = lower_bound + bin_width / 2
+  ) %>%
+  filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
+
+# Fit separate models for each side of the cutoff
+model_leftN <- lm(VS ~ MVPrev, data = plot_df_4 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 0))
+model_rightN <- lm(VS ~ MVPrev, data = plot_df_4 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 0))
+model_leftY <- lm(VS ~ MVPrev, data = plot_df_4 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 1))
+model_rightY <- lm(VS ~ MVPrev, data = plot_df_4 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 1))
+
+# Create predictions for plotting
+plot_df_4 <- plot_df_4 %>%
+  mutate(fitted_leftN = ifelse(MVPrev <= cutoff, predict(model_leftN, newdata = plot_df_4), NA),
+         fitted_rightN = ifelse(MVPrev > cutoff, predict(model_rightN, newdata = plot_df_4), NA),
+         fitted_leftY = ifelse(MVPrev <= cutoff, predict(model_leftY, newdata = plot_df_4), NA),
+         fitted_rightY = ifelse(MVPrev > cutoff, predict(model_rightY, newdata = plot_df_4), NA))
+
+# Create the scatter plot with binned summary points and separate regression lines
+plot4 <- ggplot() +
+  geom_smooth(data = plot_df_4 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 0), aes(x = MVPrev, y = fitted_leftN), method = "lm", color = "black", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_4 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 0), aes(x = MVPrev, y = fitted_rightN), method = "lm", color = "black", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_4 %>% filter(MVPrev <= cutoff, MVPrev > -10, RidingPersInc == 1), aes(x = MVPrev, y = fitted_leftY), method = "lm", color = "red", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_4 %>% filter(MVPrev > cutoff, MVPrev < 10, RidingPersInc == 1), aes(x = MVPrev, y = fitted_rightY), method = "lm", color = "red", se = FALSE, size = 0.5) +
+  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.2, alpha = 0.5, shape = 16) +
+  geom_point(data = df_binned2, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1, alpha = 0.8, shape = 0) +
+  labs(x = "Margin of Victory (%), time t-1",
+       y = "Vote Share (%), time t") +
+  theme_minimal() +
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) +
+  scale_x_continuous(limits = c(-25, 25), breaks = seq(-40, 40, by = 20)) +
+  scale_y_continuous(limits = c(0, 60), breaks = seq(0, 60, by = 20))
+
+# Display the plot
+print(plot4)
+
+
+
+combinedplot2 <- (plot3 | plot4)
+
+ggsave("CombinedPlot2.png", plot = combinedplot2, width = 6, height = 3, dpi = 300)
 
 

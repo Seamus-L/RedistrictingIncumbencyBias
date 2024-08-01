@@ -174,11 +174,14 @@ for (i in 1:nrow(df)){
         candidate <- df$Cand[i] #Not needed as of now, as PersInc captrues this already
         riding <- df$Riding[i]
 
-        row_to_find <- which(df$Party == party & df$Elec43 == 1 & df$Riding == riding) #Find row where party and riding matches and the data is from the previous year
+        row_to_find <- which(df$Party == party & df$Elec41 == 1 & df$Riding == riding) #Find row where party and riding matches and the data is from the previous year
 
         # print(df$MV[row_to_find])
         # print(df$Win[row_to_find])   
 
+
+        # print(i)
+        # print(row_to_find)
         if (length(row_to_find) != 0) { #Only do something if it finds a row that matches
             df$MVPrev[i] = df$MV[row_to_find] #Set MV prev 
             df$DPrev[i] = df$Win[row_to_find] #Set DPrev (party won in the prev election)
@@ -194,7 +197,7 @@ for (i in 1:nrow(df)){
         candidate <- df$Cand[i] #Not needed as of now, as PersInc captrues this already
         riding <- df$Riding[i]
 
-        row_to_find <- which(df$Party == party & df$Elec43 == 1 & df$Riding == riding) #Find row where party and riding matches and the data is from the previous year
+        row_to_find <- which(df$Party == party & df$Elec42 == 1 & df$Riding == riding) #Find row where party and riding matches and the data is from the previous year
 
         # print (i)
         # print(row_to_find)
@@ -239,7 +242,7 @@ for (i in 1:nrow(df)){
 
 }
 
-# View(df)
+
 
 
 #Populate - does riding have a repeat candidate for incumbent party
@@ -261,72 +264,33 @@ for (i in 2:nrow(df)){ #Iterate through dataframe to populate whether or not the
 }
 
 df_regression <- df %>% filter(MVPrev >= -15 & MVPrev <= 15) #Restricted to 15% bandwidth around MV = 0 following Rekkas
-
-View(df_regression)
-
-
-View(df)
-
-df_party <- df %>% filter(RidingPersInc == 0) #Restrict to only include entries where candidate did not seek re-election
-df_regression_party <- df_regression %>% filter(RidingPersInc == 0)
-
-
-#Model 0 - uses full data set
-model0 = lm(VS ~ factor(Party) + DPrev + MVPrev + DPrev*MVPrev, data = df_regression)
-summary(model0)
+# %>% filter(RidingPersInc == 1) %>% filter(MVPrev >= -15 & MVPrev <= 15)
 
 
 
-#Model 1 - uses dataset where same candidate did NOT run - measures party advantage
-model1 = lm(VS ~ factor(Party) + DPrev + MVPrev + DPrev*MVPrev, data = df_regression_party)
+#Model 1 - uses full data set
+model1 = lm(VS ~ factor(Party) + DPrev + MVPrev + DPrev*MVPrev + RidingPersInc + DPrev*RidingPersInc + DPrev*MVPrev*RidingPersInc, data = df_regression)
 summary(model1)
+
 
 
 df_42 <- df %>% filter(Elec42 == 1) #Restrict to only include 42nd election to compare to redistricting results
 
-df_42_party <- df_42 %>% filter(RidingPersInc == 0) #Further restrict to only include entries where candidate did not seek re-election
-
-
-
 df_regression_42 <- df_regression %>% filter(Elec42 == 1)
 
-df_regression_42_party <- df_regression_42 %>% filter(RidingPersInc == 0)
-
-
-#Model 2 - uses all candidates, but only 42nd election
-model2 = lm(VS ~ factor(Party) + DPrev + MVPrev + DPrev*MVPrev, data = df_regression_42)
+#Model 2 - restrict to 42nd election
+model2 = lm(VS ~ factor(Party) + DPrev + MVPrev + DPrev*MVPrev + RidingPersInc + DPrev*RidingPersInc + DPrev*MVPrev*RidingPersInc, data = df_regression_42)
 summary(model2)
-
-
-#Model 3 - uses dataset where same candidate did NOT run - measures party advantage
-model3 = lm(VS ~ factor(Party) + DPrev + MVPrev + DPrev*MVPrev, data = df_regression_42_party)
-summary(model3)
-
 
 
 library(stargazer)
 
-stargazer(model0,model1,model2,model3)
+stargazer(model1, model2,
+          keep = c('DPrev', 'MVPrev', 'Dprev:RidingPersInc'),
+          omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
+          title = "RD Design - 15% Bandwidth",
+          align = TRUE)  # Align coefficients
 
-
-# #Find Personal incumbency advantage
-# Pers_all = model0$coefficients[6]-model1$coefficients[6]
-# Pers_all_sd = sqrt((summary(model0)$coefficients[, "Std. Error"][6])^2+(summary(model1)$coefficients[, "Std. Error"][6])^2)
-# Pers_all
-# Pers_all_sd
-
-# Pers_all_PVal <- 2 * (1 - pnorm(abs(Pers_all/Pers_all_sd)))
-# Pers_all_PVal
-
-
-# #Repeat with restriction on 42nd election
-# Pers_42 = model2$coefficients[6]-model3$coefficients[6]
-# Pers_42_sd = sqrt((summary(model2)$coefficients[, "Std. Error"][6])^2+(summary(model3)$coefficients[, "Std. Error"][6])^2)
-# Pers_42
-# Pers_42_sd
-
-# Pers_42_PVal <- 2 * (1 - pnorm(abs(Pers_42/Pers_42_sd)))
-# Pers_42_PVal
 
 
 
@@ -353,10 +317,10 @@ cutoff <- 0
 # Need to shift points based on party FE to draw graph properly
 
 
-FE_Con = as.numeric(model0$coefficients[2])
-FE_Green = as.numeric(model0$coefficients[3])
-FE_Lib = as.numeric(model0$coefficients[4])
-FE_NDP = as.numeric(model0$coefficients[5])
+FE_Con = as.numeric(model1$coefficients[2])
+FE_Green = as.numeric(model1$coefficients[3])
+FE_Lib = as.numeric(model1$coefficients[4])
+FE_NDP = as.numeric(model1$coefficients[5])
 
 #Create list to associate fixed effects
 FE = list(
@@ -390,44 +354,51 @@ df_binned <- plot_df_1 %>%
   filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
 
 # Fit separate models for each side of the cutoff
-model_left <- lm(VS ~ MVPrev, data = plot_df_1 %>% filter(MVPrev <= cutoff) %>% filter(MVPrev > -15))
-model_right <- lm(VS ~ MVPrev, data = plot_df_1 %>% filter(MVPrev > cutoff) %>% filter(MVPrev < 15))
+model_leftN <- lm(VS ~ MVPrev, data = plot_df_1 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 0))
+model_rightN <- lm(VS ~ MVPrev, data = plot_df_1 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 0))
+model_leftY <- lm(VS ~ MVPrev, data = plot_df_1 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 1))
+model_rightY <- lm(VS ~ MVPrev, data = plot_df_1 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 1))
 
 # Create predictions for plotting
 plot_df_1 <- plot_df_1 %>%
-  mutate(fitted_left = ifelse(MVPrev <= cutoff, predict(model_left, newdata = plot_df_1), NA),
-         fitted_right = ifelse(MVPrev > cutoff, predict(model_right, newdata = plot_df_1), NA))
+  mutate(fitted_leftN = ifelse(MVPrev <= cutoff, predict(model_leftN, newdata = plot_df_1), NA),
+         fitted_rightN = ifelse(MVPrev > cutoff, predict(model_rightN, newdata = plot_df_1), NA),
+         fitted_leftY = ifelse(MVPrev <= cutoff, predict(model_leftY, newdata = plot_df_1), NA),
+         fitted_rightY = ifelse(MVPrev > cutoff, predict(model_rightY, newdata = plot_df_1), NA))
 
 # Create the scatter plot with binned summary points and separate regression lines
 plot1 <- ggplot() +
- geom_smooth(data = plot_df_1 %>% filter(MVPrev <= cutoff) %>% filter(MVPrev > -15), aes(x = MVPrev, y = fitted_left), method = "lm", color = "black", se = FALSE) +  # Regression line for left side
- geom_smooth(data = plot_df_1 %>% filter(MVPrev > cutoff) %>% filter(MVPrev < 15), aes(x = MVPrev, y = fitted_right), method = "lm", color = "black", se = FALSE) +  # Regression line for right side
-  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.5, alpha = 0.4) +  # Binned summary points
-  labs(x = "margin of victory (%), time t-1",
-       y = "vote share (%), time t") +
+  geom_smooth(data = plot_df_1 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 0), aes(x = MVPrev, y = fitted_leftN), method = "lm", color = "black", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_1 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 0), aes(x = MVPrev, y = fitted_rightN), method = "lm", color = "black", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_1 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 1), aes(x = MVPrev, y = fitted_leftY), method = "lm", color = "red", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_1 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 1), aes(x = MVPrev, y = fitted_rightY), method = "lm", color = "red", se = FALSE, size = 0.5) +
+  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.5, alpha = 0.4) +
+  labs(x = "Margin of Victory (%), time t-1",
+       y = "Vote Share (%), time t") +
   theme_minimal() +
   theme(
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank()
   ) +
-  scale_x_continuous(limits = c(-25, 25), breaks = seq(-80, 80, by = 20)) +
-  scale_y_continuous(limits = c(0, 40), breaks = seq(0, 80, by = 20))
+  scale_x_continuous(limits = c(-25, 25), breaks = seq(-40, 40, by = 20)) +
+  scale_y_continuous(limits = c(0, 60), breaks = seq(0, 60, by = 20))
 
 # Display the plot
 print(plot1)
 
 
-# ggsave("BWPlot1.png", plot = plot1, width = 6, height = 4, dpi = 300)
 
 
-############# REPEAT FOR PARTY RESTRICTION
 
-plot_df_party <- na.omit(df_party) #omit NA for plotting
 
-FE_Con = as.numeric(model1$coefficients[2])
-FE_Green = as.numeric(model1$coefficients[3])
-FE_Lib = as.numeric(model1$coefficients[4])
-FE_NDP = as.numeric(model1$coefficients[5])
+############# REPEAT FOR YEAR RESTRICTION
+
+plot_df_42<- na.omit(df_42) #omit NA for plotting
+
+FE_Con = as.numeric(model2$coefficients[2])
+FE_Green = as.numeric(model2$coefficients[3])
+FE_Lib = as.numeric(model2$coefficients[4])
+FE_NDP = as.numeric(model2$coefficients[5])
 
 #Create list to associate fixed effects
 FE = list(
@@ -439,9 +410,8 @@ FE = list(
 )
 
 
-plot_df_2 <- plot_df_party %>%
+plot_df_2 <- plot_df_42 %>%
   mutate(VS = VS - unlist(FE[Party]))
-
 
 
 
@@ -464,207 +434,43 @@ df_binned <- plot_df_2 %>%
   filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
 
 # Fit separate models for each side of the cutoff
-model_left <- lm(VS ~ MVPrev, data = plot_df_2 %>% filter(MVPrev <= cutoff) %>% filter(MVPrev > -15))
-model_right <- lm(VS ~ MVPrev, data = plot_df_2 %>% filter(MVPrev > cutoff) %>% filter(MVPrev < 15))
+model_leftN <- lm(VS ~ MVPrev, data = plot_df_2 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 0))
+model_rightN <- lm(VS ~ MVPrev, data = plot_df_2 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 0))
+model_leftY <- lm(VS ~ MVPrev, data = plot_df_2 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 1))
+model_rightY <- lm(VS ~ MVPrev, data = plot_df_2 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 1))
 
 # Create predictions for plotting
 plot_df_2 <- plot_df_2 %>%
-  mutate(fitted_left = ifelse(MVPrev <= cutoff, predict(model_left, newdata = plot_df_2), NA),
-         fitted_right = ifelse(MVPrev > cutoff, predict(model_right, newdata = plot_df_2), NA))
+  mutate(fitted_leftN = ifelse(MVPrev <= cutoff, predict(model_leftN, newdata = plot_df_2), NA),
+         fitted_rightN = ifelse(MVPrev > cutoff, predict(model_rightN, newdata = plot_df_2), NA),
+         fitted_leftY = ifelse(MVPrev <= cutoff, predict(model_leftY, newdata = plot_df_2), NA),
+         fitted_rightY = ifelse(MVPrev > cutoff, predict(model_rightY, newdata = plot_df_2), NA))
 
 # Create the scatter plot with binned summary points and separate regression lines
 plot2 <- ggplot() +
-  geom_smooth(data = plot_df_2 %>% filter(MVPrev <= cutoff) %>% filter(MVPrev > -15), aes(x = MVPrev, y = fitted_left), method = "lm", color = "black", se = FALSE) +  # Regression line for left side
-  geom_smooth(data = plot_df_2 %>% filter(MVPrev > cutoff) %>% filter(MVPrev < 15), aes(x = MVPrev, y = fitted_right), method = "lm", color = "black", se = FALSE) +  # Regression line for right side
-  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.5, alpha = 0.4) +  # Binned summary points
-  labs(x = "margin of victory (%), time t-1",
-  y = "") +
+  geom_smooth(data = plot_df_2 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 0), aes(x = MVPrev, y = fitted_leftN), method = "lm", color = "black", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_2 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 0), aes(x = MVPrev, y = fitted_rightN), method = "lm", color = "black", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_2 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 1), aes(x = MVPrev, y = fitted_leftY), method = "lm", color = "red", se = FALSE, size = 0.5) +
+  geom_smooth(data = plot_df_2 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 1), aes(x = MVPrev, y = fitted_rightY), method = "lm", color = "red", se = FALSE, size = 0.5) +
+  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.5, alpha = 0.4) +
+  labs(x = "Margin of Victory (%), time t-1",
+       y = "Vote Share (%), time t") +
   theme_minimal() +
   theme(
     panel.grid.major.x = element_blank(),
     panel.grid.minor.x = element_blank()
   ) +
-  scale_x_continuous(limits = c(-25, 25), breaks = seq(-80, 80, by = 20)) +
-  scale_y_continuous(limits = c(0, 40), breaks = seq(0, 80, by = 20))
-
+  scale_x_continuous(limits = c(-25, 25), breaks = seq(-40, 40, by = 20)) +
+  scale_y_continuous(limits = c(0, 60), breaks = seq(0, 60, by = 20))
 
 # Display the plot
 print(plot2)
 
 
-# ggsave("BWPlot2.png", plot = plot2, width = 6, height = 4, dpi = 300)
 
 
-
-library(patchwork)
-
-print(plot1 | plot2)
 
 
 combinedplot <- plot1 | plot2
 
 ggsave("CombinedPlot1.png", plot = combinedplot, width = 6, height = 3, dpi = 300)
-
-
-
-
-
-
-
-
-
-
-
-plot_df_42<- na.omit(df_42) #omit NA for plotting
-
-FE_Con = as.numeric(model2$coefficients[2])
-FE_Green = as.numeric(model2$coefficients[3])
-FE_Lib = as.numeric(model2$coefficients[4])
-FE_NDP = as.numeric(model2$coefficients[5])
-
-#Create list to associate fixed effects
-FE = list(
-    'CON' = FE_Con,
-    'LIB' = FE_Lib,
-    'GREEN' = FE_Green,
-    'NDP' = FE_NDP,
-    'BLOC' = 0
-)
-
-
-plot_df_3 <- plot_df_42 %>%
-  mutate(VS = VS - unlist(FE[Party]))
-
-
-
-
-
-
-# Create bins and calculate midpoints
-df_binned <- plot_df_3 %>%
-  mutate(MVPrev_bin = cut(MVPrev, 
-                          breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
-                          include.lowest = TRUE, 
-                          right = FALSE)) %>%
-  filter(!is.na(MVPrev_bin)) %>%
-  group_by(MVPrev_bin) %>%
-  summarise(mean_VS = mean(VS, na.rm = TRUE), 
-            .groups = 'drop') %>%
-  mutate(
-    bin_range = as.character(MVPrev_bin),
-    lower_bound = as.numeric(sub("\\[(-?[0-9.]+),.*\\)", "\\1", bin_range)),
-    MVPrev_mid = lower_bound + bin_width / 2
-  ) %>%
-  filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
-
-# Fit separate models for each side of the cutoff
-model_left <- lm(VS ~ MVPrev, data = plot_df_3 %>% filter(MVPrev <= cutoff) %>% filter(MVPrev > -15))
-model_right <- lm(VS ~ MVPrev, data = plot_df_3 %>% filter(MVPrev > cutoff) %>% filter(MVPrev < 15))
-
-# Create predictions for plotting
-plot_df_3 <- plot_df_3 %>%
-  mutate(fitted_left = ifelse(MVPrev <= cutoff, predict(model_left, newdata = plot_df_3), NA),
-         fitted_right = ifelse(MVPrev > cutoff, predict(model_right, newdata = plot_df_3), NA))
-
-# Create the scatter plot with binned summary points and separate regression lines
-plot3 <- ggplot() +
-  geom_smooth(data = plot_df_3 %>% filter(MVPrev <= cutoff) %>% filter(MVPrev > -15), aes(x = MVPrev, y = fitted_left), method = "lm", color = "black", se = FALSE) +  # Regression line for left side
-  geom_smooth(data = plot_df_3 %>% filter(MVPrev > cutoff) %>% filter(MVPrev < 15), aes(x = MVPrev, y = fitted_right), method = "lm", color = "black", se = FALSE) +  # Regression line for right side
-  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.5, alpha = 0.4) +  # Binned summary points
-  labs(x = "margin of victory (%), time t-1",
-       y = "vote share (%), time t") +
-  theme_minimal() +
-  theme(
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank()
-  ) +
-  scale_x_continuous(limits = c(-25, 25), breaks = seq(-80, 80, by = 20)) +
-  scale_y_continuous(limits = c(0, 40), breaks = seq(0, 80, by = 20))
-
-# Display the plot
-print(plot3)
-
-
-
-
-
-
-
-
-
-
-plot_df_42_party <- na.omit(df_42_party) #omit NA for plotting
-
-
-FE_Con = as.numeric(model3$coefficients[2])
-FE_Green = as.numeric(model3$coefficients[3])
-FE_Lib = as.numeric(model3$coefficients[4])
-FE_NDP = as.numeric(model3$coefficients[5])
-
-#Create list to associate fixed effects
-FE = list(
-    'CON' = FE_Con,
-    'LIB' = FE_Lib,
-    'GREEN' = FE_Green,
-    'NDP' = FE_NDP,
-    'BLOC' = 0
-)
-
-
-plot_df_4 <- plot_df_42_party %>%
-  mutate(VS = VS - unlist(FE[Party]))
-
-
-
-
-
-
-# Create bins and calculate midpoints
-df_binned <- plot_df_4 %>%
-  mutate(MVPrev_bin = cut(MVPrev, 
-                          breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
-                          include.lowest = TRUE, 
-                          right = FALSE)) %>%
-  filter(!is.na(MVPrev_bin)) %>%
-  group_by(MVPrev_bin) %>%
-  summarise(mean_VS = mean(VS, na.rm = TRUE), 
-            .groups = 'drop') %>%
-  mutate(
-    bin_range = as.character(MVPrev_bin),
-    lower_bound = as.numeric(sub("\\[(-?[0-9.]+),.*\\)", "\\1", bin_range)),
-    MVPrev_mid = lower_bound + bin_width / 2
-  ) %>%
-  filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
-
-# Fit separate models for each side of the cutoff
-model_left <- lm(VS ~ MVPrev, data = plot_df_4 %>% filter(MVPrev <= cutoff) %>% filter(MVPrev > -15))
-model_right <- lm(VS ~ MVPrev, data = plot_df_4 %>% filter(MVPrev > cutoff) %>% filter(MVPrev < 15))
-
-# Create predictions for plotting
-plot_df_4 <- plot_df_4 %>%
-  mutate(fitted_left = ifelse(MVPrev <= cutoff, predict(model_left, newdata = plot_df_4), NA),
-         fitted_right = ifelse(MVPrev > cutoff, predict(model_right, newdata = plot_df_4), NA))
-
-# Create the scatter plot with binned summary points and separate regression lines
-plot4 <- ggplot() +
-  geom_smooth(data = plot_df_4 %>% filter(MVPrev <= cutoff) %>% filter(MVPrev > -15), aes(x = MVPrev, y = fitted_left), method = "lm", color = "black", se = FALSE) +  # Regression line for left side
-  geom_smooth(data = plot_df_4 %>% filter(MVPrev > cutoff) %>% filter(MVPrev < 15), aes(x = MVPrev, y = fitted_right), method = "lm", color = "black", se = FALSE) +  # Regression line for right side
-  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.5, alpha = 0.4) +  # Binned summary points
-  labs(x = "margin of victory (%), time t-1",
-       y = "") +
-  theme_minimal() +
-  theme(
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank()
-  ) +
-  scale_x_continuous(limits = c(-25, 25), breaks = seq(-80, 80, by = 20)) +
-  scale_y_continuous(limits = c(0, 40), breaks = seq(0, 80, by = 20))
-
-# Display the plot
-print(plot4)
-
-
-combinedplot <- plot3 | plot4
-
-ggsave("CombinedPlot2.png", plot = combinedplot, width = 6, height = 3, dpi = 300)
-

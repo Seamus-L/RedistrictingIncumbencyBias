@@ -286,7 +286,7 @@ summary(model2)
 library(stargazer)
 
 stargazer(model1, model2,
-          keep = c('DPrev', 'MVPrev', 'Dprev:RidingPersInc'),
+          keep = c('DPrev', 'MVPrev', 'RidingPersInc', 'Dprev:RidingPersInc'),
           omit.stat = c("rsq", "ser", "f"),  # Omit standard errors and F-statistic
           title = "RD Design - 15% Bandwidth",
           align = TRUE)  # Align coefficients
@@ -332,12 +332,13 @@ FE = list(
 )
 
 
+
 plot_df_1 <- plot_df %>%
   mutate(VS = VS - unlist(FE[Party]))
 
 
 # Create bins and calculate midpoints
-df_binned <- plot_df_1 %>%
+df_binned <- plot_df_1 %>% filter(RidingPersInc == 0) %>%
   mutate(MVPrev_bin = cut(MVPrev, 
                           breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
                           include.lowest = TRUE, 
@@ -352,6 +353,24 @@ df_binned <- plot_df_1 %>%
     MVPrev_mid = lower_bound + bin_width / 2
   ) %>%
   filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
+
+
+df_binned2 <- plot_df_1 %>% filter(RidingPersInc == 1) %>%
+  mutate(MVPrev_bin = cut(MVPrev, 
+                          breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
+                          include.lowest = TRUE, 
+                          right = FALSE)) %>%
+  filter(!is.na(MVPrev_bin)) %>%
+  group_by(MVPrev_bin) %>%
+  summarise(mean_VS = mean(VS, na.rm = TRUE), 
+            .groups = 'drop') %>%
+  mutate(
+    bin_range = as.character(MVPrev_bin),
+    lower_bound = as.numeric(sub("\\[(-?[0-9.]+),.*\\)", "\\1", bin_range)),
+    MVPrev_mid = lower_bound + bin_width / 2
+  ) %>%
+  filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
+
 
 # Fit separate models for each side of the cutoff
 model_leftN <- lm(VS ~ MVPrev, data = plot_df_1 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 0))
@@ -372,7 +391,8 @@ plot1 <- ggplot() +
   geom_smooth(data = plot_df_1 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 0), aes(x = MVPrev, y = fitted_rightN), method = "lm", color = "black", se = FALSE, size = 0.5) +
   geom_smooth(data = plot_df_1 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 1), aes(x = MVPrev, y = fitted_leftY), method = "lm", color = "red", se = FALSE, size = 0.5) +
   geom_smooth(data = plot_df_1 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 1), aes(x = MVPrev, y = fitted_rightY), method = "lm", color = "red", se = FALSE, size = 0.5) +
-  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.5, alpha = 0.4) +
+  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.2, alpha = 0.5, shape = 16) +
+  geom_point(data = df_binned2, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1, alpha = 0.8, shape = 0) +
   labs(x = "Margin of Victory (%), time t-1",
        y = "Vote Share (%), time t") +
   theme_minimal() +
@@ -417,7 +437,7 @@ plot_df_2 <- plot_df_42 %>%
 
 
 # Create bins and calculate midpoints
-df_binned <- plot_df_2 %>%
+df_binned <- plot_df_2  %>% filter(RidingPersInc == 0)%>%
   mutate(MVPrev_bin = cut(MVPrev, 
                           breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
                           include.lowest = TRUE, 
@@ -432,6 +452,25 @@ df_binned <- plot_df_2 %>%
     MVPrev_mid = lower_bound + bin_width / 2
   ) %>%
   filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
+
+
+df_binned2 <- plot_df_2 %>% filter(RidingPersInc == 1) %>%
+  mutate(MVPrev_bin = cut(MVPrev, 
+                          breaks = seq(floor(min(MVPrev, na.rm = TRUE)), ceiling(max(MVPrev, na.rm = TRUE)), by = bin_width), 
+                          include.lowest = TRUE, 
+                          right = FALSE)) %>%
+  filter(!is.na(MVPrev_bin)) %>%
+  group_by(MVPrev_bin) %>%
+  summarise(mean_VS = mean(VS, na.rm = TRUE), 
+            .groups = 'drop') %>%
+  mutate(
+    bin_range = as.character(MVPrev_bin),
+    lower_bound = as.numeric(sub("\\[(-?[0-9.]+),.*\\)", "\\1", bin_range)),
+    MVPrev_mid = lower_bound + bin_width / 2
+  ) %>%
+  filter(!is.na(mean_VS) & !is.na(MVPrev_mid))
+
+
 
 # Fit separate models for each side of the cutoff
 model_leftN <- lm(VS ~ MVPrev, data = plot_df_2 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 0))
@@ -452,7 +491,8 @@ plot2 <- ggplot() +
   geom_smooth(data = plot_df_2 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 0), aes(x = MVPrev, y = fitted_rightN), method = "lm", color = "black", se = FALSE, size = 0.5) +
   geom_smooth(data = plot_df_2 %>% filter(MVPrev <= cutoff, MVPrev > -15, RidingPersInc == 1), aes(x = MVPrev, y = fitted_leftY), method = "lm", color = "red", se = FALSE, size = 0.5) +
   geom_smooth(data = plot_df_2 %>% filter(MVPrev > cutoff, MVPrev < 15, RidingPersInc == 1), aes(x = MVPrev, y = fitted_rightY), method = "lm", color = "red", se = FALSE, size = 0.5) +
-  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.5, alpha = 0.4) +
+  geom_point(data = df_binned, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1.2, alpha = .5, shape = 16) +
+  geom_point(data = df_binned2, aes(x = MVPrev_mid, y = mean_VS), color = "black", size = 1, alpha = .8, shape = 0) +
   labs(x = "Margin of Victory (%), time t-1",
        y = "Vote Share (%), time t") +
   theme_minimal() +
@@ -474,3 +514,5 @@ print(plot2)
 combinedplot <- plot1 | plot2
 
 ggsave("CombinedPlot1.png", plot = combinedplot, width = 6, height = 3, dpi = 300)
+
+

@@ -1,16 +1,16 @@
 #This file is used to construct a data set usable for regressions
-#Takes output from 42RidingAggregator, as well as past election results to generate a data set
+#Takes output from RidingAggregator, as well as past election results to generate a data set
 #usable for statistical analysis
 library(dplyr)
 
 #First, read in CSV that filters ridings eligible for analysis (possible incumbents)
 #These are ridings that were identified by name to match with ridings from the previous election
 #As of now, these are the only ridings considered in this analysis
-df_filter <- read.csv("RidingFilter.csv")
+df_filter <- read.csv("Data/RidingFilter.csv")
 
 
 #Now, read in the aggregated data set from 42nd election
-df_42Data <- read.csv("42Results.csv")
+df_42Data <- read.csv("Data/42Results.csv")
 
 
 #Now, add a  new column to df_42Data that takes the riding number from the 41st election that it matches to
@@ -40,7 +40,7 @@ for (i in 1:nrow(df_42Data)) {
 
 #Now, pair with data on elected candidates in 41st election
 #This data is contained in table-11 of official election data
-df_table11_41 <- read.csv("41ResultsRAW/table_tableau11.csv", encoding = "latin1", stringsAsFactors = FALSE)
+df_table11_41 <- read.csv("Data/41ResultsRAW/table_tableau11.csv", encoding = "latin1", stringsAsFactors = FALSE)
 
 
 
@@ -224,7 +224,7 @@ for (i in 1:nrow(df_42Data)) {
 #Now include previous poll results to see if they predict turnout now
 
 #First, import results 41
-df_41Data <- read.csv("41Results.csv")
+df_41Data <- read.csv("Data/41Results.csv")
 
 #Now, remove any entries that have NA entries in their turnout
 df_41Data<- df_41Data %>% filter(TurnoutAbs != "Invalid Number")
@@ -232,9 +232,9 @@ df_41Data<- df_41Data %>% filter(TurnoutAbs != "Invalid Number")
 
 #Now need to map polling places from 41 to 42 by name of polling place
 #Import polling station list 41 and 42
-df_41Loc <- read.csv("41ResultsRAW/41PollLocations.csv", header = TRUE, sep = ",")
+df_41Loc <- read.csv("Data/41ResultsRAW/41PollLocations.csv", header = TRUE, sep = ",")
 
-df_42Loc <- read.csv("42ResultsRAW/42PollLocations.csv", header = TRUE, sep = ",")
+df_42Loc <- read.csv("Data/42ResultsRAW/42PollLocations.csv", header = TRUE, sep = ",")
 
 
 #For matching purposes, use site name, concatinated with province abbreviation
@@ -243,9 +243,9 @@ df_41Loc$Address = paste(df_41Loc$Site.name..EN...Nom.du.site..AN.,df_41Loc$Muni
 df_42Loc$Address = paste(df_42Loc$Site.name..EN...Nom.du.site..AN.,df_42Loc$Municipality..EN.,df_42Loc$Province)
 
 #Now load dictionary files that associate stations with places
-df_41Dict = read.csv("41Dictionary.csv", header = TRUE, sep = ",")
+df_41Dict = read.csv("Dictionaries/41Dictionary.csv", header = TRUE, sep = ",")
 
-df_42Dict = read.csv("42Dictionary.csv", header = TRUE, sep = ",")
+df_42Dict = read.csv("Dictionaries/42Dictionary.csv", header = TRUE, sep = ",")
 
 #Reformat station number column to align formatting with poll result files
 Reformat_PDSV <- function(x) {
@@ -512,7 +512,7 @@ stargazer(model15, model16, model17, model19, model18,
 
 
 #First, use table 12 to find winning party for each riding
-df_42Winners <- read.csv("42ResultsRAW/table_tableau12.csv")
+df_42Winners <- read.csv("Data/42ResultsRAW/table_tableau12.csv")
 #Now, because the table records the results for each person running, need to truncate so only the first row is retained for each riding
 df_42Winners <- df_42Winners %>% distinct(Electoral.District.Number.Numéro.de.circonscription, .keep_all = TRUE)
 
@@ -669,8 +669,8 @@ summary(AttritionModel2)
 
 
 #Export plots
-ggsave("plot1.png", plot = plot1, width = 6, height = 4, dpi = 300)
-ggsave("plot2.png", plot = plot2, width = 6, height = 4, dpi = 300)
+ggsave("Outputs/plot1.png", plot = plot1, width = 6, height = 4, dpi = 300)
+ggsave("Outputs/plot2.png", plot = plot2, width = 6, height = 4, dpi = 300)
 
 cat(" Attrition from matching to 41 =",1-sum(df_42Data_Filtered$Place41!=0)/nrow(df_42Data_Filtered))
 

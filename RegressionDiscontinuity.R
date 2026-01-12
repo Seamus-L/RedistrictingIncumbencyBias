@@ -2,7 +2,7 @@
 #Can conveniently use table-12 files provided by statistics  canada to construct the data set
 library(dplyr)
 #First, create index to relate ridings across redistricting period (41 - 42)
-dictionary <- read.csv("RidingFilter.csv")
+dictionary <- read.csv("Dictionaries/RidingFilter.csv")
 
 
 #Change the names of the dictionary's columns to better reflect usage, then remove all unecessary columns, then mutate all #N/A to NA
@@ -61,7 +61,7 @@ k = 1 #initialise iterator for writing to final data frame
 
 
 for (i in elections){
-    address <- paste0("RDData/table_tableau12_",i,".csv")
+    address <- paste0("Data/RDData/table_tableau12_",i,".csv")
     if (i == 41){
         data <- read.csv(address, fileEncoding = "latin1") #First table has different encoding
     } else {
@@ -524,7 +524,7 @@ print(plot2)
 
 combinedplot <- plot1 | plot2 
 
-ggsave("CombinedPlot1.png", plot = combinedplot, width = 6, height = 3, dpi = 300)
+ggsave("Outputs/CombinedPlot1.png", plot = combinedplot, width = 6, height = 3, dpi = 300)
 
 
 
@@ -725,7 +725,7 @@ library(patchwork)
 
 combinedplot2 <- (plot1 | plot2) / (plot3 | plot4)
 
-ggsave("CombinedPlot2.png", plot = combinedplot2, width = 6, height = 6, dpi = 300)
+ggsave("Outputs/CombinedPlot3.png", plot = combinedplot2, width = 6, height = 6, dpi = 300)
 
 
 
@@ -825,6 +825,6 @@ print(plot4)
 
 combinedplot2 <- (plot3 | plot4)
 
-ggsave("CombinedPlot2.png", plot = combinedplot2, width = 6, height = 3, dpi = 300)
+ggsave("Outputs/CombinedPlot2.png", plot = combinedplot2, width = 6, height = 3, dpi = 300)
 
 
